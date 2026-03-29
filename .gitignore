@@ -1,0 +1,8 @@
+/sandbox.py
+/.idea
+/.env
+/.venv
+/.vscode
+/.run/
+*__pycache__
+/docs/build/

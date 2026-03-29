@@ -1,0 +1,55 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        args: ["--preview", "--line-length", "79"]
+  - repo: https://github.com/Tesla2000/temp-reorder-python-imports
+    rev: v0.0.1
+    hooks:
+      - id: reorder-python-imports
+        args: [
+          --py37-plus,
+          --py39-plus,
+          --retain-pre-import,
+          'True',
+          --application-directories,
+          "type_first_discriminator",
+        ]
+  - repo: https://github.com/PyCQA/autoflake
+    rev: v2.3.3
+    hooks:
+      - id: autoflake
+        args: [ --remove-all-unused-imports, --in-place ]
+  - repo: https://github.com/pycqa/flake8
+    rev: '7.3.0'
+    hooks:
+      - id: flake8
+        args: [ "--ignore=E203,W503,E501,E704" ]
+  - repo: https://github.com/Tesla2000/vulture
+    rev: v0.0.3
+    hooks:
+      - id: vulture
+        args:
+          [
+            ".",
+            "--exclude",
+            ".venv,venv,tests/base.py",
+            "--ignore-attributes-for-classes=.*",
+            "--ignore-decorators=@app.*,@pytest.fixture,@property,@model_validator,@field_serializer,@field_validator",
+            "--ignore-names=Meta,__dict__,cli_cmd",
+             "--extra-sys-path=.venv/lib/python3.12/site-packages,.",
+          ]
+        stages: [ pre-commit ]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic>=2.8.2
+          - pydantic-settings>=2.13.0
+  - repo: https://github.com/Tesla2000/any-hook
+    rev: v2.0.3
+    hooks:
+      - id: any-hook
+        args: [--modifiers, '[{"type":"object-to-any"},{"type":"workflow-env-to-example","workflow_paths":[".github/workflows/tests.yml"],"ignored_names":["GH_TOKEN"]},{"type":"pydantic-config-to-model-config"},{"type":"local-imports"},{"type":"pydantic-v1-to-v2"},{"type":"str-enum-inheritance"},{"type":"forbidden-functions","forbidden_functions":["hasattr","getattr","print"]},{"type":"utcnow-to-datetime-now"},{"type":"len-as-bool"},{"type":"typing-to-builtin"}]']
