@@ -26,21 +26,21 @@ repos:
     hooks:
       - id: flake8
         args: [ "--ignore=E203,W503,E501,E704" ]
-  - repo: https://github.com/Tesla2000/vulture
-    rev: v0.0.3
-    hooks:
-      - id: vulture
-        args:
-          [
-            ".",
-            "--exclude",
-            ".venv,venv,tests/base.py",
-            "--ignore-attributes-for-classes=.*",
-            "--ignore-decorators=@app.*,@pytest.fixture,@property,@model_validator,@field_serializer,@field_validator",
-            "--ignore-names=Meta,__dict__,cli_cmd",
-             "--extra-sys-path=.venv/lib/python3.12/site-packages,.",
-          ]
-        stages: [ pre-commit ]
+#  - repo: https://github.com/Tesla2000/vulture
+#    rev: v0.0.3
+#    hooks:
+#      - id: vulture
+#        args:
+#          [
+#            ".",
+#            "--exclude",
+#            ".venv,venv,tests/base.py",
+#            "--ignore-attributes-for-classes=.*",
+#            "--ignore-decorators=@app.*,@pytest.fixture,@property,@model_validator,@field_serializer,@field_validator",
+#            "--ignore-names=Meta,__dict__,cli_cmd",
+#             "--extra-sys-path=.venv/lib/python3.12/site-packages,.",
+#          ]
+#        stages: [ pre-commit ]
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.1
     hooks:

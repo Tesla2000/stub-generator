@@ -1,12 +1,15 @@
 [project]
-name = "stub_generator"
+name = "stub_added"
 version = "0.1.1"
 description = "Createst stub files for external packages"
 authors = [{name = "Tesla2000", email = "fratajczak124@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "mypy>=1.19.1",
+    "pydantic-logger",
     "pydantic-settings>=2.13.0",
+    "tomli>=2.4.1",
 ]
 
 [build-system]
@@ -15,3 +18,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["stub_generator"]
+
+[tool.uv.sources]
+pydantic-logger = { git = "https://github.com/Tesla2000/pydantic-logger" }
