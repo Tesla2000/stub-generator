@@ -1,6 +1,6 @@
 [project]
 name = "stub_generator"
-version = "0.1.0"
+version = "0.1.1"
 description = "Createst stub files for external packages"
 authors = [{name = "Tesla2000", email = "fratajczak124@gmail.com"}]
 readme = "README.md"
