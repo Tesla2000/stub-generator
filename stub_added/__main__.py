@@ -1,12 +1,16 @@
+import os
+import tempfile
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic import HttpUrl
 from pydantic_settings import BaseSettings
 from pydantic_settings import CliApp
 from pydantic_settings import SettingsConfigDict
-from stub_added.branch_typeshed import BranchTypeshed
-from stub_added.stub_generator import StubGenerator
+from stub_added.input.stub_generator import StubGenerator
+from stub_added.output.branch_typeshed import BranchTypeshed
+from stub_added.transformer.fill_with_llm import FillWithLLM
 
 
 class Main(BaseSettings):
@@ -16,20 +20,24 @@ class Main(BaseSettings):
         cli_kebab_case=True,
     )
 
-    typeshed_path: Path = Field(
-        default_factory=lambda: Path(__file__).parent.parent / "typeshed",
-        description="Path to the typeshed submodule directory",
+    output_path: Path = Field(
+        default_factory=lambda: Path(tempfile.TemporaryDirectory().name)
     )
+
     stubbed_repo_url: HttpUrl
-    branch_creator: BranchTypeshed = Field(default_factory=BranchTypeshed)
-    stub_generator: StubGenerator = Field(default_factory=StubGenerator)
+    input: StubGenerator
+    transformer: FillWithLLM = Field(default_factory=FillWithLLM)
+    outputs: tuple[BranchTypeshed, ...]
 
     async def cli_cmd(self) -> None:
-        self.branch_creator.branch(
-            str(self.stubbed_repo_url).split("/")[-1], self.typeshed_path
+        stub_tuples = tuple(
+            self.input.generate(self.stubbed_repo_url, self.output_path)
         )
-        self.stub_generator.generate(self.stubbed_repo_url, self.typeshed_path)
+        transformed_tuples = self.transformer.transform(stub_tuples)
+        for output in self.outputs:
+            output.save(transformed_tuples, self.output_path)
 
 
 if __name__ == "__main__":
+    load_dotenv(os.getenv("ENV_FILE", ".env"))
     CliApp.run(Main)

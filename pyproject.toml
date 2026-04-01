@@ -4,11 +4,15 @@ version = "0.1.2"
 description = "Createst stub files for external packages"
 authors = [{name = "Tesla2000", email = "fratajczak124@gmail.com"}]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
+    "langchain>=1.2.14",
+    "langchain-google-genai>=4.2.1",
     "mypy>=1.19.1",
+    "pydantic>=2.12.5",
     "pydantic-logger",
     "pydantic-settings>=2.13.0",
+    "pygithub>=2.9.0",
     "tomli>=2.4.1",
 ]
 
