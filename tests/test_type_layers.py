@@ -13,10 +13,10 @@ class TestIntegrationGoogleAuth(TestCase):
             "https://github.com/googleapis/google-auth-library-python.git"
         )
         with tempfile.TemporaryDirectory() as tmp:
-            stub_generator = StubGenerator(paths=[Path("google")])
-            stub_tuples = tuple(
-                stub_generator.generate(google_auth_url, Path(tmp))
+            stub_generator = StubGenerator(
+                stubbed_repo_url=google_auth_url, paths=[Path("google")]
             )
+            stub_tuples = tuple(stub_generator.generate(Path(tmp)))
             layers = tuple(FillWithLLM._topo_layers(stub_tuples))
 
         self.assertGreater(len(layers), 1)

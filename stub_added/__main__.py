@@ -4,13 +4,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from pydantic import Field
-from pydantic import HttpUrl
 from pydantic_settings import BaseSettings
 from pydantic_settings import CliApp
 from pydantic_settings import SettingsConfigDict
-from stub_added.input.stub_generator import StubGenerator
-from stub_added.output.branch_typeshed import BranchTypeshed
-from stub_added.transformer.fill_with_llm import FillWithLLM
+from stub_added.input import AnyInput
+from stub_added.output import AnyOutput
+from stub_added.transformer import AnyTransformer
+from stub_added.transformer.no_op_transformer import NoOpTransformer
 
 
 class Main(BaseSettings):
@@ -24,15 +24,12 @@ class Main(BaseSettings):
         default_factory=lambda: Path(tempfile.TemporaryDirectory().name)
     )
 
-    stubbed_repo_url: HttpUrl
-    input: StubGenerator
-    transformer: FillWithLLM = Field(default_factory=FillWithLLM)
-    outputs: tuple[BranchTypeshed, ...]
+    input: AnyInput
+    transformer: AnyTransformer = Field(default_factory=NoOpTransformer)
+    outputs: tuple[AnyOutput, ...] = Field(min_length=1)
 
     async def cli_cmd(self) -> None:
-        stub_tuples = tuple(
-            self.input.generate(self.stubbed_repo_url, self.output_path)
-        )
+        stub_tuples = tuple(self.input.generate(self.output_path))
         transformed_tuples = self.transformer.transform(stub_tuples)
         for output in self.outputs:
             output.save(transformed_tuples, self.output_path)

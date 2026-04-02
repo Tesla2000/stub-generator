@@ -15,19 +15,20 @@ class StubGenerator(BaseModel):
     logger: PydanticLogger = Field(
         default_factory=lambda: PydanticLogger(name=__name__)
     )
+    stubbed_repo_url: HttpUrl
     paths: list[Path]
     input_path: Path = Field(
         default_factory=lambda: Path(tempfile.TemporaryDirectory().name)
     )
 
-    def generate(
-        self, stubbed_repo_url: HttpUrl, output_path: Path
-    ) -> Iterable[_StubTuple]:
-        self.logger.debug(f"Cloning repository from {stubbed_repo_url}...")
+    def generate(self, output_path: Path) -> Iterable[_StubTuple]:
+        self.logger.debug(
+            f"Cloning repository from {self.stubbed_repo_url}..."
+        )
 
         # Clone the repository
         subprocess.run(
-            ["git", "clone", str(stubbed_repo_url), str(self.input_path)],
+            ["git", "clone", str(self.stubbed_repo_url), str(self.input_path)],
             capture_output=True,
             text=True,
             check=True,

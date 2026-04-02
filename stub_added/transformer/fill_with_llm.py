@@ -2,7 +2,6 @@ import ast
 import os
 from collections.abc import Collection
 from pathlib import Path
-from typing import TypeVar
 
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
@@ -10,14 +9,14 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 from pydantic import Field
 from stub_added._stub_tuple import _StubTuple
-
-_StubTuples = TypeVar("_StubTuples", bound=Collection[_StubTuple])
+from stub_added.transformer._stub_tuples import _StubTuples
+from tqdm import tqdm
 
 
 class FillWithLLM(BaseModel):
     chat_model: ChatGoogleGenerativeAI = Field(
         default_factory=lambda: ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash", temperature=0
+            model="gemini-2.5-flash-lite", temperature=0
         )
     )
 
@@ -30,23 +29,32 @@ class FillWithLLM(BaseModel):
             stub_outputs: list[StubOutput]
 
         completed: dict[Path, str] = {}
+        pyi_to_deps = self._pyi_to_deps(stub_tuples)
 
-        for layer in self._topo_layers(stub_tuples):
+        for layer in tqdm(self._topo_layers(stub_tuples)):
             missing = set(s.pyi_path for s in layer)
             while missing:
+                # Collect completed stubs that are direct imports of this layer
+                needed_completed: set[Path] = {
+                    dep
+                    for s in layer
+                    for dep in pyi_to_deps.get(s.pyi_path, set())
+                    if dep in completed
+                }
+
                 context_parts = []
-                for s in stub_tuples:
-                    if s.pyi_path in completed:
+                for pyi, contents in completed.items():
+                    if pyi in needed_completed:
                         context_parts.append(
-                            f"Completed stub (for reference):\nStub path:{s.pyi_path}"
-                            f"\n\nStub contents:\n{completed[s.pyi_path]}"
+                            f"Completed stub (for reference):\nStub path:{pyi}"
+                            f"\nStub contents:\n{contents}"
                         )
-                    elif s.pyi_path in missing:
-                        context_parts.append(
-                            f"Original file:\n{s.py_path.read_text()}"
-                            f"\n\nStub path:{s.pyi_path}"
-                            f"\n\nStub contents:\n{s.pyi_path.read_text()}"
-                        )
+                for s in layer:
+                    context_parts.append(
+                        f"Original file:\n{s.py_path.read_text()}"
+                        f"\n\nStub path:{s.pyi_path}"
+                        f"\nStub contents:\n{s.pyi_path.read_text()}"
+                    )
 
                 output_files = self.chat_model.with_structured_output(
                     OutputSchema
@@ -56,7 +64,7 @@ class FillWithLLM(BaseModel):
                             "Fill missing type hints in stub files based on original files. "
                             "You must provide type hinting to each variable, field, argument, "
                             "keyword argument and function return value, Any if can't be decided, "
-                            "Self if self. Remove unused imports. "
+                            "Self if self. Remove unused imports and add missing imports. "
                             f"Return a list of {StubOutput.__name__} objects where stub_path "
                             "corresponds to original stub file and contents is version with all "
                             "type hints present. Return contents for all Stub paths even if they "
@@ -84,6 +92,40 @@ class FillWithLLM(BaseModel):
                 missing -= {output.stub_path for output in stub_outputs}
 
         return stub_tuples
+
+    @classmethod
+    def _pyi_to_deps(
+        cls, stub_tuples: Collection[_StubTuple]
+    ) -> dict[Path, set[Path]]:
+        """Map each stub's pyi_path to the pyi_paths it directly depends on."""
+        if not stub_tuples:
+            return {}
+        module_to_stub = cls._build_module_map(stub_tuples)
+        return {
+            s.pyi_path: {
+                module_to_stub[m].pyi_path
+                for m in cls._internal_imports(s.py_path, module_to_stub)
+            }
+            for s in stub_tuples
+        }
+
+    @staticmethod
+    def _build_module_map(
+        stub_tuples: Collection[_StubTuple],
+    ) -> dict[str, _StubTuple]:
+        """Map dotted module name → stub tuple, derived from py_path structure."""
+        common = Path(os.path.commonpath([s.py_path for s in stub_tuples]))
+        if common.is_file():
+            common = common.parent
+        root = common.parent
+
+        def _mod(py: Path) -> str:
+            parts = py.relative_to(root).with_suffix("").parts
+            if parts and parts[-1] == "__init__":
+                parts = parts[:-1]
+            return ".".join(parts)
+
+        return {_mod(s.py_path): s for s in stub_tuples}
 
     @staticmethod
     def _internal_imports(
@@ -115,27 +157,8 @@ class FillWithLLM(BaseModel):
         if not stub_tuples:
             return []
 
-        # Use py_paths to derive module names so they match the actual import
-        # statements in source code (e.g. "google.auth.credentials", not just
-        # "auth.credentials"). commonpath gives the top-level package directory;
-        # its parent is the root that Python's import system would use.
-        common = Path(os.path.commonpath([s.py_path for s in stub_tuples]))
-        if common.is_file():
-            common = common.parent
-        root = common.parent
-
-        def _module_name(py_path: Path) -> str:
-            parts = py_path.relative_to(root).with_suffix("").parts
-            if parts and parts[-1] == "__init__":
-                parts = parts[:-1]
-            return ".".join(parts)
-
-        module_to_stub: dict[str, _StubTuple] = {
-            _module_name(s.py_path): s for s in stub_tuples
-        }
-        mod_by_path = {
-            s.pyi_path: _module_name(s.py_path) for s in stub_tuples
-        }
+        module_to_stub = cls._build_module_map(stub_tuples)
+        mod_by_path = {t.pyi_path: m for m, t in module_to_stub.items()}
         stub_by_path = {s.pyi_path: s for s in stub_tuples}
 
         remaining: dict[Path, set[str]] = {

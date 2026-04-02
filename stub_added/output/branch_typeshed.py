@@ -119,10 +119,9 @@ class BranchTypeshed(BaseModel):
         return pr.html_url
 
     def save(self, stub_tuples: Iterable[_StubTuple], stubs_root: Path) -> str:
-        stub_tuples_list = list(stub_tuples)
         commit_hash = self._update_typeshed()
         created_branch = self._create_branch(self.branch_name)
-        self._add_stub_files(stub_tuples_list, stubs_root)
+        self._add_stub_files(stub_tuples, stubs_root)
         pr_url = self._create_draft_pr(
             title=f"Add type stubs for {self.branch_name}"
         )
