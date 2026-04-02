@@ -4,11 +4,9 @@ from contextlib import suppress
 from pathlib import Path
 from shutil import copy2
 
-from github import Github
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
-from pydantic import SecretStr
 from pydantic_logger import PydanticLogger
 from stub_added._stub_tuple import _StubTuple
 
@@ -19,13 +17,12 @@ class BranchTypeshed(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     typeshed_path: Path = Field(
-        default_factory=lambda: Path(__file__).parent.parent / "typeshed",
+        Path("typeshed"),
         description="Path to the typeshed submodule directory",
     )
     logger: PydanticLogger = Field(
         default_factory=lambda: PydanticLogger(name=__name__)
     )
-    github_token: SecretStr
     branch_name: str
 
     def _run_git_command(self, *args: str) -> str:
@@ -102,31 +99,17 @@ class BranchTypeshed(BaseModel):
         )
         self.logger.debug("Committed stub files")
 
-    def _create_draft_pr(self, title: str, body: str = "") -> str:
+    def _push_branch(self) -> None:
         self._run_git_command("push", "-u", "origin", self.branch_name)
         self.logger.debug(f"Pushed branch '{self.branch_name}' to origin")
 
-        gh = Github(self.github_token.get_secret_value())
-        repo = gh.get_repo("python/typeshed")
-        pr = repo.create_pull(
-            title=title,
-            body=body,
-            head=self.branch_name,
-            base="main",
-            draft=True,
-        )
-        self.logger.debug(f"Created draft PR: {pr.html_url}")
-        return pr.html_url
-
-    def save(self, stub_tuples: Iterable[_StubTuple], stubs_root: Path) -> str:
+    def save(
+        self, stub_tuples: Iterable[_StubTuple], stubs_root: Path
+    ) -> None:
         commit_hash = self._update_typeshed()
         created_branch = self._create_branch(self.branch_name)
         self._add_stub_files(stub_tuples, stubs_root)
-        pr_url = self._create_draft_pr(
-            title=f"Add type stubs for {self.branch_name}"
-        )
+        self._push_branch()
         self.logger.debug("\nSuccess!")
         self.logger.debug(f"  Commit: {commit_hash}")
         self.logger.debug(f"  Branch: {created_branch}")
-        self.logger.debug(f"  PR: {pr_url}")
-        return pr_url

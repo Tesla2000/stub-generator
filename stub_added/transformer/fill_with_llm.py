@@ -64,11 +64,12 @@ class FillWithLLM(BaseModel):
                             "Fill missing type hints in stub files based on original files. "
                             "You must provide type hinting to each variable, field, argument, "
                             "keyword argument and function return value, Any if can't be decided, "
-                            "Self if self. Remove unused imports and add missing imports. "
+                            "Self if self. "
                             f"Return a list of {StubOutput.__name__} objects where stub_path "
                             "corresponds to original stub file and contents is version with all "
                             "type hints present. Return contents for all Stub paths even if they "
-                            "don't require changes"
+                            "don't require changes."
+                            "Important: Remove unused imports and add missing imports. Remember that Forward reference only works with Union, not with | operator. Add imports from other packages if they are required."
                         ),
                         HumanMessage(
                             "\n\n".join(context_parts)
