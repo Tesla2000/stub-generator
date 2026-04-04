@@ -17,7 +17,7 @@ class StubGenerator(BaseModel):
     )
     stubbed_repo_url: HttpUrl
     paths: list[Path]
-    input_path: Path = Field(
+    clone_path: Path = Field(
         default_factory=lambda: Path(tempfile.TemporaryDirectory().name)
     )
 
@@ -28,15 +28,15 @@ class StubGenerator(BaseModel):
 
         # Clone the repository
         subprocess.run(
-            ["git", "clone", str(self.stubbed_repo_url), str(self.input_path)],
+            ["git", "clone", str(self.stubbed_repo_url), str(self.clone_path)],
             capture_output=True,
             text=True,
             check=True,
         )
 
-        self.logger.debug(f"Repository cloned to {self.input_path}")
+        self.logger.debug(f"Repository cloned to {self.clone_path}")
 
-        package_paths = tuple(map(self.input_path.joinpath, self.paths))
+        package_paths = tuple(map(self.clone_path.joinpath, self.paths))
 
         self.logger.debug("Generating stub files...")
         self._generate_stubs(
@@ -51,7 +51,7 @@ class StubGenerator(BaseModel):
                 yield _StubTuple(
                     py_path=original_path,
                     pyi_path=output_path.joinpath(
-                        original_path.relative_to(self.input_path).with_suffix(
+                        original_path.relative_to(self.clone_path).with_suffix(
                             ".pyi"
                         )
                     ),
@@ -73,12 +73,15 @@ class StubGenerator(BaseModel):
     @classmethod
     def _generate_stubs(cls, paths: Iterable[Path], output_dir: Path) -> None:
         for path in paths:
+            out = output_dir / path.name
+            if out.exists() and any(out.rglob("*.pyi")):
+                continue
             subprocess.run(
                 [
                     "stubgen",
                     str(path),
                     "-o",
-                    str(output_dir / path.name),
+                    str(out),
                 ],
                 capture_output=True,
                 text=True,

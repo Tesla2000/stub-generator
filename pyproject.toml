@@ -6,8 +6,13 @@ authors = [{name = "Tesla2000", email = "fratajczak124@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "autoflake>=2.3.3",
+    "autoimport>=1.6.1",
+    "black>=26.3.1",
+    "isort>=8.0.1",
     "langchain>=1.2.14",
     "langchain-google-genai>=4.2.1",
+    "langchain-openai>=1.1.12",
     "mypy>=1.19.1",
     "pydantic>=2.12.5",
     "pydantic-logger",
@@ -15,6 +20,8 @@ dependencies = [
     "pygithub>=2.9.0",
     "tomli>=2.4.1",
     "tqdm>=4.67.3",
+    "types-grpcio>=1.0.0.20251009",
+    "types-requests>=2.33.0.20260402",
 ]
 
 [build-system]
@@ -26,3 +33,8 @@ packages = ["stub_generator"]
 
 [tool.uv.sources]
 pydantic-logger = { git = "https://github.com/Tesla2000/pydantic-logger" }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
