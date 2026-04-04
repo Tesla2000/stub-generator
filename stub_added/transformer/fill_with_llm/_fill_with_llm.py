@@ -24,9 +24,7 @@ from stub_added.transformer.fill_with_llm._schema import _StubOutputPath
 from stub_added.transformer.fill_with_llm._topo import pyi_to_deps
 from stub_added.transformer.fill_with_llm._topo import topo_layers
 from stub_added.transformer.fill_with_llm.manual_fixes import AnyManualFix
-from stub_added.transformer.fill_with_llm.manual_fixes import (
-    DEFAULT_MANUAL_FIXES,
-)
+from stub_added.transformer.fill_with_llm.manual_fixes import LspViolationFixer
 from stub_added.transformer.transformer_type import TransformerType
 from tqdm import tqdm
 
@@ -46,20 +44,18 @@ class FillWithLLM(BaseModel):
     )
     max_mypy_fix_iterations: PositiveInt = 5
     manual_fixes: tuple[AnyManualFix, ...] = Field(
-        default=DEFAULT_MANUAL_FIXES
+        default=(LspViolationFixer(),)
     )
 
-    def transform(
-        self, stub_tuples: _StubTuples, stubs_dir: Path
-    ) -> _StubTuples:
-        self._fill_stubs(stub_tuples, stubs_dir)
+    def transform(self, stub_tuples: _StubTuples) -> _StubTuples:
+        self._fill_stubs(stub_tuples)
         return stub_tuples
 
-    def _fill_stubs(self, stub_tuples: _StubTuples, stubs_dir: Path) -> None:
+    def _fill_stubs(self, stub_tuples: _StubTuples) -> None:
         completed: dict[Path, str] = {}
         deps = pyi_to_deps(stub_tuples)
         for layer in tqdm(topo_layers(stub_tuples)):
-            self._fix_mypy_errors(layer, deps, completed, stubs_dir)
+            self._fix_mypy_errors(layer, deps, completed)
             for s in layer:
                 completed[s.pyi_path] = s.pyi_path.read_text()
 
@@ -68,28 +64,24 @@ class FillWithLLM(BaseModel):
         layer: list[_StubTuple],
         layer_deps: dict[Path, set[Path]],
         completed: dict[Path, str],
-        stubs_dir: Path,
     ) -> None:
         pyi_paths = [s.pyi_path for s in layer]
         stub_by_path = {s.pyi_path: s for s in layer}
 
         for _ in range(self.max_mypy_fix_iterations):
-            errors_by_file = run_mypy(pyi_paths, stubs_dir)
+            errors_by_file = run_mypy(pyi_paths)
             if not errors_by_file:
-                return
+                break
 
             for pyi, errors in errors_by_file.items():
                 contents = pyi.read_text()
                 for fix in self.manual_fixes:
                     contents = fix(contents, errors)
-                    pyi.write_text(contents)
-                    errors = run_mypy([pyi], stubs_dir).get(pyi, [])
-                    if not errors:
-                        break
+                pyi.write_text(contents)
 
-            errors_by_file = run_mypy(pyi_paths, stubs_dir)
+            errors_by_file = run_mypy(pyi_paths)
             if not errors_by_file:
-                return
+                break
 
             affected_stubs = list(
                 filter(None, map(stub_by_path.get, errors_by_file))
@@ -112,26 +104,20 @@ class FillWithLLM(BaseModel):
                 f"\n\nMypy errors:\n{chr(10).join(errors_by_file[s.pyi_path])}"
                 for s in affected_stubs
             ]
-            try:
-                stub_outputs = self._invoke_llm(
-                    "Fill in missing type hints and fix mypy --strict errors in stub files. "
-                    "You are given the original Python file, the current stub contents, "
-                    "and the mypy errors describing what is missing or wrong. "
-                    "Resolve all errors so the stub passes mypy --strict. "
-                    f"Return a list of {_StubOutput.__name__} objects where stub_path "
-                    "corresponds to the stub file and contents is the fixed version. "
-                    + _STUB_RULES,
-                    context_parts,
-                    affected_stubs,
-                )
-            except SyntaxError:
-                continue
+            stub_outputs = self._invoke_llm(
+                "Fill in missing type hints and fix mypy --strict errors in stub files. "
+                "You are given the original Python file, the current stub contents, "
+                "and the mypy errors describing what is missing or wrong. "
+                "Resolve all errors so the stub passes mypy --strict. "
+                f"Return a list of {_StubOutput.__name__} objects where stub_path "
+                "corresponds to the stub file and contents is the fixed version. "
+                + _STUB_RULES,
+                context_parts,
+                affected_stubs,
+            )
             for output in stub_outputs:
                 if output.stub_path in errors_by_file:
                     output.stub_path.write_text(output.stub_contents)
-        raise ValueError(
-            f"Failed to fix all mypy issues in {self.max_mypy_fix_iterations} iterations.\n{errors_by_file=}"
-        )
 
     def _invoke_llm(
         self,
