@@ -46,6 +46,7 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies:
+          - "pydantic-logger @ git+https://github.com/Tesla2000/pydantic-logger"
           - pydantic>=2.8.2
           - pydantic-settings>=2.13.0
           - types-tqdm

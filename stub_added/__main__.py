@@ -30,7 +30,9 @@ class Main(BaseSettings):
 
     async def cli_cmd(self) -> None:
         stub_tuples = tuple(self.input.generate(self.output_path))
-        transformed_tuples = self.transformer.transform(stub_tuples)
+        transformed_tuples = self.transformer.transform(
+            stub_tuples, self.output_path
+        )
         for output in self.outputs:
             output.save(transformed_tuples, self.output_path)
 
