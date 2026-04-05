@@ -3,6 +3,9 @@ import re
 from typing import Literal
 
 from stub_added.transformer.fill_with_llm.manual_fixes._base import ManualFix
+from stub_added.transformer.fill_with_llm.manual_fixes.import_fixer import (
+    resolve_annotation_imports,
+)
 
 # Format 1: per-argument errors
 # Argument N of "method" is incompatible with supertype "X";
@@ -21,6 +24,44 @@ _SIG_RE = re.compile(
     r'error: Signature of "(?P<method>[^"]+)" incompatible with supertype'
 )
 _DEF_NOTE_RE = re.compile(r"note:\s+def \w+\(")
+
+# Format 3: return type errors
+# error: Return type "X" of "method" incompatible with return type "Y" in supertype "Z"
+_RETURN_RE = re.compile(
+    r'error: Return type "[^"]+" of "(?P<method>[^"]+)" incompatible with '
+    r'return type "(?P<expected>[^"]+)" in supertype'
+)
+
+
+def _parse_return_fixes(errors: list[str]) -> dict[str, ast.expr]:
+    """Format 3: method → supertype return annotation (first supertype wins)."""
+    fixes: dict[str, ast.expr] = {}
+    for error in errors:
+        m = _RETURN_RE.search(error)
+        if not m:
+            continue
+        method = m.group("method")
+        if method in fixes:
+            continue
+        try:
+            fixes[method] = ast.parse(m.group("expected"), mode="eval").body
+        except SyntaxError:
+            pass
+    return fixes
+
+
+class _ReturnTypeFixer(ast.NodeTransformer):
+    def __init__(self, fixes: dict[str, ast.expr]) -> None:
+        self._fixes = fixes
+
+    def _fix(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        self.generic_visit(node)
+        if node.name in self._fixes:
+            node.returns = self._fixes[node.name]
+        return node
+
+    visit_FunctionDef = _fix
+    visit_AsyncFunctionDef = _fix  # type: ignore[assignment]
 
 
 def _parse_positional_fixes(
@@ -44,9 +85,9 @@ def _parse_positional_fixes(
 
 def _parse_signature_fixes(
     errors: list[str],
-) -> dict[str, list[tuple[str, ast.expr]]]:
-    """Format 2: method → ordered [(arg_name, annotation)] from Superclass def note."""
-    result: dict[str, list[tuple[str, ast.expr]]] = {}
+) -> dict[str, tuple[ast.arguments, ast.expr | None]]:
+    """Format 2: method → (superclass ast.arguments self-stripped, return annotation)."""
+    result: dict[str, tuple[ast.arguments, ast.expr | None]] = {}
     seen: set[str] = set()
     i = 0
     while i < len(errors):
@@ -68,18 +109,22 @@ def _parse_signature_fixes(
                             tree = ast.parse(f"{def_line}: ...", mode="exec")
                             func = tree.body[0]
                             assert isinstance(func, ast.FunctionDef)
-                            all_args = func.args.posonlyargs + func.args.args
-                            non_self = (
-                                all_args[1:]
-                                if all_args
-                                and all_args[0].arg in ("self", "cls")
-                                else all_args
-                            )
-                            result[method] = [
-                                (arg.arg, arg.annotation)
-                                for arg in non_self
-                                if arg.annotation
-                            ]
+                            args = func.args
+                            returns = func.returns
+                            # Strip self/cls from positional args
+                            all_pos = args.posonlyargs + args.args
+                            if all_pos and all_pos[0].arg in ("self", "cls"):
+                                if args.posonlyargs:
+                                    args.posonlyargs = args.posonlyargs[1:]
+                                else:
+                                    args.args = args.args[1:]
+                                # Trim defaults to match remaining positional args
+                                remaining = len(args.posonlyargs) + len(
+                                    args.args
+                                )
+                                if len(args.defaults) > remaining:
+                                    args.defaults = args.defaults[-remaining:]
+                            result[method] = (args, returns)
                         except SyntaxError:
                             pass
                 break
@@ -116,7 +161,7 @@ class _SignatureFixer(ast.NodeTransformer):
     """Reorder and retype non-self args to match the superclass signature."""
 
     def __init__(
-        self, sig_fixes: dict[str, list[tuple[str, ast.expr]]]
+        self, sig_fixes: dict[str, tuple[ast.arguments, ast.expr | None]]
     ) -> None:
         self._fixes = sig_fixes
 
@@ -125,9 +170,9 @@ class _SignatureFixer(ast.NodeTransformer):
         if node.name not in self._fixes:
             return node
 
-        superclass_args = self._fixes[
-            node.name
-        ]  # ordered [(name, annotation)]
+        super_args, super_returns = self._fixes[node.name]
+        if super_returns is not None:
+            node.returns = super_returns
         all_args = node.args.posonlyargs + node.args.args
         self_args = (
             all_args[:1]
@@ -136,6 +181,14 @@ class _SignatureFixer(ast.NodeTransformer):
         )
         non_self = all_args[len(self_args) :]
 
+        # If subclass uses *args/**kwargs, replace entire signature with superclass's
+        if node.args.vararg is not None or not non_self:
+            super_non_self = super_args.args  # already self-stripped
+            node.args = super_args
+            node.args.posonlyargs = []
+            node.args.args = self_args + super_non_self
+            return node
+
         subclass_by_name = {arg.arg: arg for arg in non_self}
         had_default = {
             arg.arg
@@ -143,23 +196,23 @@ class _SignatureFixer(ast.NodeTransformer):
             if arg in _args_with_defaults(node, len(self_args))
         }
 
+        super_positional = super_args.posonlyargs + super_args.args
         reordered: list[ast.arg] = []
-        for name, super_ann in superclass_args:
-            if name not in subclass_by_name:
+        for super_arg in super_positional:
+            if super_arg.arg not in subclass_by_name:
                 continue
-            arg = subclass_by_name[name]
-            arg.annotation = super_ann
+            arg = subclass_by_name[super_arg.arg]
+            arg.annotation = super_arg.annotation
             reordered.append(arg)
 
         # Any subclass args absent from superclass go at the end unchanged
-        super_names = {name for name, _ in superclass_args}
+        super_names = {a.arg for a in super_positional}
         for arg in non_self:
             if arg.arg not in super_names:
                 reordered.append(arg)
 
         node.args.posonlyargs = []
         node.args.args = self_args + reordered
-        # Rebuild defaults: stubs always use `...` so just preserve the count
         default_count = sum(1 for a in reordered if a.arg in had_default)
         node.args.defaults = [ast.Constant(value=...)] * default_count
         return node
@@ -184,8 +237,9 @@ class LspViolationFixer(ManualFix):
     def __call__(self, contents: str, errors: list[str]) -> str:
         positional = _parse_positional_fixes(errors)
         named = _parse_signature_fixes(errors)
+        returns = _parse_return_fixes(errors)
 
-        if not positional and not named:
+        if not positional and not named and not returns:
             return contents
 
         tree = ast.parse(contents)
@@ -193,5 +247,7 @@ class LspViolationFixer(ManualFix):
             tree = _PositionalFixer(positional).visit(tree)
         if named:
             tree = _SignatureFixer(named).visit(tree)
+        if returns:
+            tree = _ReturnTypeFixer(returns).visit(tree)
         ast.fix_missing_locations(tree)
-        return ast.unparse(tree)
+        return resolve_annotation_imports(ast.unparse(tree), errors)
