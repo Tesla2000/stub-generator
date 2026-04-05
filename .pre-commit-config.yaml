@@ -46,8 +46,19 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies:
+          - "pydantic-logger @ git+https://github.com/Tesla2000/pydantic-logger"
           - pydantic>=2.8.2
           - pydantic-settings>=2.13.0
+          - types-tqdm
+          - autoflake
+          - autoimport
+          - black
+          - isort
+          - tomli
+          - langchain-core
+          - langchain-google-genai
+          - langchain-openai
+        args: [--check-untyped-defs]
   - repo: https://github.com/Tesla2000/any-hook
     rev: v2.0.3
     hooks:
