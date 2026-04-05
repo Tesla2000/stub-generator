@@ -1153,8 +1153,8 @@ wheels = [
 
 [[package]]
 name = "pydantic-logger"
-version = "0.1.9"
-source = { git = "https://github.com/Tesla2000/pydantic-logger#2d6329b82ab5bd52622cfd8ffaca8aa17f4bd1cb" }
+version = "0.1.11"
+source = { git = "https://github.com/Tesla2000/pydantic-logger#d39e41ca57ce5ffdec17aed6a2377c069e2a0b01" }
 dependencies = [
     { name = "pydantic" },
 ]
