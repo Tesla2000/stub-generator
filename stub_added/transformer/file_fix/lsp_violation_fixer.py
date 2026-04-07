@@ -1,62 +1,12 @@
 import ast
 import re
+from collections.abc import Iterable
 from pathlib import Path
+from typing import ClassVar
 from typing import Literal
 
 from stub_added.transformer.file_fix._base import ManualFix
-from stub_added.transformer.file_fix.import_fixer import (
-    resolve_annotation_imports,
-)
-
-# Format 1: per-argument errors
-# Argument N of "method" is incompatible with supertype "X";
-# supertype defines the argument type as "TYPE"  [override]
-_ARG_RE = re.compile(
-    r':\d+: error: Argument (?P<n>\d+) of "(?P<method>[^"]+)" '
-    r"is incompatible with supertype \"[^\"]+\"; "
-    r'supertype defines the argument type as "(?P<expected>[^"]+)"'
-)
-
-# Format 2: full-signature errors
-# error: Signature of "method" incompatible with supertype "X"  [override]
-# note:      Superclass:
-# note:          def method(...)
-_SIG_RE = re.compile(
-    r'error: Signature of "(?P<method>[^"]+)" incompatible with supertype'
-)
-_DEF_NOTE_RE = re.compile(r"note:\s+def \w+\(")
-_TYPE_NOTE_RE = re.compile(r"note:\s+\S")
-
-# Format 4: field/property errors
-# error: Signature of "name" incompatible with supertype "X"  [override]
-# note:      Superclass:
-# note:          <type>    (not a def line)
-# note:      Subclass:
-# note:          <type>
-
-# Format 3: return type errors
-# error: Return type "X" of "method" incompatible with return type "Y" in supertype "Z"
-_RETURN_RE = re.compile(
-    r'error: Return type "[^"]+" of "(?P<method>[^"]+)" incompatible with '
-    r'return type "(?P<expected>[^"]+)" in supertype'
-)
-
-
-def _parse_return_fixes(errors: list[str]) -> dict[str, ast.expr]:
-    """Format 3: method → supertype return annotation (first supertype wins)."""
-    fixes: dict[str, ast.expr] = {}
-    for error in errors:
-        m = _RETURN_RE.search(error)
-        if not m:
-            continue
-        method = m.group("method")
-        if method in fixes:
-            continue
-        try:
-            fixes[method] = ast.parse(m.group("expected"), mode="eval").body
-        except SyntaxError:
-            pass
-    return fixes
+from stub_added.transformer.file_fix.import_fixer import ImportFixer
 
 
 class _ReturnTypeFixer(ast.NodeTransformer):
@@ -71,75 +21,6 @@ class _ReturnTypeFixer(ast.NodeTransformer):
 
     visit_FunctionDef = _fix
     visit_AsyncFunctionDef = _fix  # type: ignore[assignment]
-
-
-def _parse_positional_fixes(
-    errors: list[str],
-) -> dict[tuple[str, int], ast.expr]:
-    """Format 1: (method, arg_n) → supertype annotation."""
-    fixes: dict[tuple[str, int], ast.expr] = {}
-    for error in errors:
-        m = _ARG_RE.search(error)
-        if not m:
-            continue
-        key = (m.group("method"), int(m.group("n")))
-        if key in fixes:
-            continue
-        try:
-            fixes[key] = ast.parse(m.group("expected"), mode="eval").body
-        except SyntaxError:
-            pass
-    return fixes
-
-
-def _parse_signature_fixes(
-    errors: list[str],
-) -> dict[str, tuple[ast.arguments, ast.expr | None]]:
-    """Format 2: method → (superclass ast.arguments self-stripped, return annotation)."""
-    result: dict[str, tuple[ast.arguments, ast.expr | None]] = {}
-    seen: set[str] = set()
-    i = 0
-    while i < len(errors):
-        sig_m = _SIG_RE.search(errors[i])
-        if not sig_m:
-            i += 1
-            continue
-        method = sig_m.group("method")
-        j = i + 1
-        while j < len(errors) and not _SIG_RE.search(errors[j]):
-            if "Superclass:" in errors[j]:
-                if j + 1 < len(errors) and _DEF_NOTE_RE.search(errors[j + 1]):
-                    def_line = re.sub(
-                        r"^[^:]+:\d+: note:\s+", "", errors[j + 1]
-                    ).strip()
-                    if method not in seen:
-                        seen.add(method)
-                        try:
-                            tree = ast.parse(f"{def_line}: ...", mode="exec")
-                            func = tree.body[0]
-                            assert isinstance(func, ast.FunctionDef)
-                            args = func.args
-                            returns = func.returns
-                            # Strip self/cls from positional args
-                            all_pos = args.posonlyargs + args.args
-                            if all_pos and all_pos[0].arg in ("self", "cls"):
-                                if args.posonlyargs:
-                                    args.posonlyargs = args.posonlyargs[1:]
-                                else:
-                                    args.args = args.args[1:]
-                                # Trim defaults to match remaining positional args
-                                remaining = len(args.posonlyargs) + len(
-                                    args.args
-                                )
-                                if len(args.defaults) > remaining:
-                                    args.defaults = args.defaults[-remaining:]
-                            result[method] = (args, returns)
-                        except SyntaxError:
-                            pass
-                break
-            j += 1
-        i += 1
-    return result
 
 
 class _PositionalFixer(ast.NodeTransformer):
@@ -174,6 +55,16 @@ class _SignatureFixer(ast.NodeTransformer):
     ) -> None:
         self._fixes = sig_fixes
 
+    @staticmethod
+    def _args_with_defaults(
+        node: ast.FunctionDef, self_count: int
+    ) -> set[ast.arg]:
+        """Return the set of positional args that have default values."""
+        all_args = node.args.posonlyargs + node.args.args
+        non_self = all_args[self_count:]
+        n_defaults = len(node.args.defaults)
+        return set(non_self[len(non_self) - n_defaults :])
+
     def _fix(self, node: ast.FunctionDef) -> ast.FunctionDef:
         self.generic_visit(node)
         if node.name not in self._fixes:
@@ -202,7 +93,7 @@ class _SignatureFixer(ast.NodeTransformer):
         had_default = {
             arg.arg
             for arg in non_self
-            if arg in _args_with_defaults(node, len(self_args))
+            if arg in self._args_with_defaults(node, len(self_args))
         }
 
         super_positional = super_args.posonlyargs + super_args.args
@@ -228,51 +119,6 @@ class _SignatureFixer(ast.NodeTransformer):
 
     visit_FunctionDef = _fix
     visit_AsyncFunctionDef = _fix  # type: ignore[assignment]
-
-
-def _args_with_defaults(
-    node: ast.FunctionDef, self_count: int
-) -> set[ast.arg]:
-    """Return the set of positional args that have default values."""
-    all_args = node.args.posonlyargs + node.args.args
-    non_self = all_args[self_count:]
-    n_defaults = len(node.args.defaults)
-    return set(non_self[len(non_self) - n_defaults :])
-
-
-def _parse_field_fixes(errors: list[str]) -> dict[str, ast.expr]:
-    """Format 4: field/property name → supertype annotation (non-def signature mismatch)."""
-    result: dict[str, ast.expr] = {}
-    i = 0
-    while i < len(errors):
-        sig_m = _SIG_RE.search(errors[i])
-        if not sig_m:
-            i += 1
-            continue
-        name = sig_m.group("method")
-        j = i + 1
-        while j < len(errors) and not _SIG_RE.search(errors[j]):
-            if "Superclass:" in errors[j]:
-                candidate = j + 1
-                if (
-                    candidate < len(errors)
-                    and _TYPE_NOTE_RE.search(errors[candidate])
-                    and not _DEF_NOTE_RE.search(errors[candidate])
-                ):
-                    type_str = re.sub(
-                        r"^[^:]+:\d+: note:\s+", "", errors[candidate]
-                    ).strip()
-                    if name not in result:
-                        try:
-                            result[name] = ast.parse(
-                                type_str, mode="eval"
-                            ).body
-                        except SyntaxError:
-                            pass
-                break
-            j += 1
-        i += 1
-    return result
 
 
 class _FieldFixer(ast.NodeTransformer):
@@ -307,14 +153,179 @@ class _FieldFixer(ast.NodeTransformer):
 
 class LspViolationFixer(ManualFix):
     type: Literal["lsp"] = "lsp"
+    # Format 1: per-argument errors
+    _ARG_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r':\d+: error: Argument (?P<n>\d+) of "(?P<method>[^"]+)" '
+        r"is incompatible with supertype \"[^\"]+\"; "
+        r'supertype defines the argument type as "(?P<expected>[^"]+)"'
+    )
+    # Format 2: full-signature errors
+    _SIG_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r'error: Signature of "(?P<method>[^"]+)" incompatible with supertype'
+    )
+    _DEF_NOTE_RE: ClassVar[re.Pattern[str]] = re.compile(r"note:\s+def \w+\(")
+    _TYPE_NOTE_RE: ClassVar[re.Pattern[str]] = re.compile(r"note:\s+\S")
+    # Format 3: return type errors
+    _RETURN_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r'error: Return type "[^"]+" of "(?P<method>[^"]+)" incompatible with '
+        r'return type "(?P<expected>[^"]+)" in supertype'
+    )
+
+    @staticmethod
+    def _parse_return_fixes(errors: list[str]) -> dict[str, ast.expr]:
+        """Format 3: method → supertype return annotation (first supertype wins)."""
+        fixes: dict[str, ast.expr] = {}
+        for error in errors:
+            m = LspViolationFixer._RETURN_RE.search(error)
+            if not m:
+                continue
+            method = m.group("method")
+            if method in fixes:
+                continue
+            try:
+                fixes[method] = ast.parse(
+                    m.group("expected"), mode="eval"
+                ).body
+            except SyntaxError:
+                pass
+        return fixes
+
+    @staticmethod
+    def _parse_positional_fixes(
+        errors: list[str],
+    ) -> dict[tuple[str, int], ast.expr]:
+        """Format 1: (method, arg_n) → supertype annotation."""
+        fixes: dict[tuple[str, int], ast.expr] = {}
+        for error in errors:
+            m = LspViolationFixer._ARG_RE.search(error)
+            if not m:
+                continue
+            key = (m.group("method"), int(m.group("n")))
+            if key in fixes:
+                continue
+            try:
+                fixes[key] = ast.parse(m.group("expected"), mode="eval").body
+            except SyntaxError:
+                pass
+        return fixes
+
+    @staticmethod
+    def _parse_signature_fixes(
+        errors: list[str],
+    ) -> dict[str, tuple[ast.arguments, ast.expr | None]]:
+        """Format 2: method → (superclass ast.arguments self-stripped, return annotation)."""
+        result: dict[str, tuple[ast.arguments, ast.expr | None]] = {}
+        seen: set[str] = set()
+        i = 0
+        while i < len(errors):
+            sig_m = LspViolationFixer._SIG_RE.search(errors[i])
+            if not sig_m:
+                i += 1
+                continue
+            method = sig_m.group("method")
+            j = i + 1
+            while j < len(errors) and not LspViolationFixer._SIG_RE.search(
+                errors[j]
+            ):
+                if "Superclass:" in errors[j]:
+                    if j + 1 < len(
+                        errors
+                    ) and LspViolationFixer._DEF_NOTE_RE.search(errors[j + 1]):
+                        def_line = re.sub(
+                            r"^[^:]+:\d+: note:\s+", "", errors[j + 1]
+                        ).strip()
+                        if method not in seen:
+                            seen.add(method)
+                            try:
+                                tree = ast.parse(
+                                    f"{def_line}: ...", mode="exec"
+                                )
+                                func = tree.body[0]
+                                assert isinstance(func, ast.FunctionDef)
+                                args = func.args
+                                returns = func.returns
+                                # Strip self/cls from positional args
+                                all_pos = args.posonlyargs + args.args
+                                if all_pos and all_pos[0].arg in (
+                                    "self",
+                                    "cls",
+                                ):
+                                    if args.posonlyargs:
+                                        args.posonlyargs = args.posonlyargs[1:]
+                                    else:
+                                        args.args = args.args[1:]
+                                    # Trim defaults to match remaining positional args
+                                    remaining = len(args.posonlyargs) + len(
+                                        args.args
+                                    )
+                                    if len(args.defaults) > remaining:
+                                        args.defaults = args.defaults[
+                                            -remaining:
+                                        ]
+                                result[method] = (args, returns)
+                            except SyntaxError:
+                                pass
+                    break
+                j += 1
+            i += 1
+        return result
+
+    @staticmethod
+    def _parse_field_fixes(errors: list[str]) -> dict[str, ast.expr]:
+        """Format 4: field/property name → supertype annotation (non-def signature mismatch)."""
+        result: dict[str, ast.expr] = {}
+        i = 0
+        while i < len(errors):
+            sig_m = LspViolationFixer._SIG_RE.search(errors[i])
+            if not sig_m:
+                i += 1
+                continue
+            name = sig_m.group("method")
+            j = i + 1
+            while j < len(errors) and not LspViolationFixer._SIG_RE.search(
+                errors[j]
+            ):
+                if "Superclass:" in errors[j]:
+                    candidate = j + 1
+                    if (
+                        candidate < len(errors)
+                        and LspViolationFixer._TYPE_NOTE_RE.search(
+                            errors[candidate]
+                        )
+                        and not LspViolationFixer._DEF_NOTE_RE.search(
+                            errors[candidate]
+                        )
+                    ):
+                        type_str = re.sub(
+                            r"^[^:]+:\d+: note:\s+", "", errors[candidate]
+                        ).strip()
+                        if name not in result:
+                            try:
+                                result[name] = ast.parse(
+                                    type_str, mode="eval"
+                                ).body
+                            except SyntaxError:
+                                pass
+                    break
+                j += 1
+            i += 1
+        return result
+
+    def is_applicable(self, errors: Iterable[str]) -> bool:
+        return any(
+            self._ARG_RE.search(e)
+            or self._SIG_RE.search(e)
+            or (self._RETURN_RE.search(e) and "Coroutine" not in e)
+            for e in errors
+        )
 
     def __call__(
         self, contents: str, errors: list[str], stubs_dir: Path | None = None
     ) -> str:
-        positional = _parse_positional_fixes(errors)
-        named = _parse_signature_fixes(errors)
-        returns = _parse_return_fixes(errors)
-        all_field_fixes = _parse_field_fixes(errors)
+        positional = self._parse_positional_fixes(errors)
+        named = self._parse_signature_fixes(errors)
+        returns = self._parse_return_fixes(errors)
+        all_field_fixes = self._parse_field_fixes(errors)
         # Exclude names already handled as method signatures
         fields = {k: v for k, v in all_field_fixes.items() if k not in named}
 
@@ -331,4 +342,6 @@ class LspViolationFixer(ManualFix):
         if fields:
             tree = _FieldFixer(fields).visit(tree)
         ast.fix_missing_locations(tree)
-        return resolve_annotation_imports(ast.unparse(tree), errors, stubs_dir)
+        return ImportFixer.resolve_annotation_imports(
+            ast.unparse(tree), errors, stubs_dir
+        )

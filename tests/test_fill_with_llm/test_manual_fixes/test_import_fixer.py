@@ -7,10 +7,6 @@ from unittest import TestCase
 
 from stub_added.transformer._class_finder import find_name_in_supertype_stubs
 from stub_added.transformer.file_fix import ImportFixer
-from stub_added.transformer.file_fix.import_fixer import _locally_defined_names
-from stub_added.transformer.file_fix.import_fixer import (
-    resolve_annotation_imports,
-)
 
 
 def _mypy_errors(path: Path) -> list[str]:
@@ -131,7 +127,9 @@ class TestResolveAnnotationImportsViaSupertypeStub(TestCase):
             'f.pyi:6: error: Return type "Coroutine[Any, Any, _MyResponse]" of "__call__" '
             'incompatible with return type "Response" in supertype "pkg.transport.Request"  [override]'
         ]
-        result = resolve_annotation_imports(code, errors, self.root)
+        result = ImportFixer.resolve_annotation_imports(
+            code, errors, self.root
+        )
         self.assertIn("from pkg.transport import Response", result)
 
     def test_locally_defined_class_not_flagged_as_unresolved(self):
@@ -168,7 +166,9 @@ class TestResolveAnnotationImportsViaSupertypeStub(TestCase):
             'incompatible with return type "Response" in supertype "pkg.transport.Request"  [override]'
         ]
         # Must not raise even though `_Response` is in annotation names and not imported
-        result = resolve_annotation_imports(code, errors, self.root)
+        result = ImportFixer.resolve_annotation_imports(
+            code, errors, self.root
+        )
         self.assertNotIn("import _Response", result)
 
     def test_raises_when_type_cannot_be_resolved(self):
@@ -181,7 +181,7 @@ class TestResolveAnnotationImportsViaSupertypeStub(TestCase):
             '"nonexistent.module.Base"  [override]'
         ]
         with self.assertRaises(RuntimeError):
-            resolve_annotation_imports(code, errors, self.root)
+            ImportFixer.resolve_annotation_imports(code, errors, self.root)
 
 
 class TestLocallyDefinedNames(TestCase):
@@ -190,30 +190,34 @@ class TestLocallyDefinedNames(TestCase):
 
     def test_collects_class_names(self):
         tree = self._parse("class Foo: ...\nclass Bar: ...\n")
-        self.assertEqual(_locally_defined_names(tree), {"Foo", "Bar"})
+        self.assertEqual(
+            ImportFixer._locally_defined_names(tree), {"Foo", "Bar"}
+        )
 
     def test_collects_function_names(self):
         tree = self._parse(
             "def foo() -> None: ...\nasync def bar() -> None: ...\n"
         )
-        self.assertEqual(_locally_defined_names(tree), {"foo", "bar"})
+        self.assertEqual(
+            ImportFixer._locally_defined_names(tree), {"foo", "bar"}
+        )
 
     def test_collects_annotated_assignments(self):
         tree = self._parse("x: int\ny: str\n")
-        self.assertEqual(_locally_defined_names(tree), {"x", "y"})
+        self.assertEqual(ImportFixer._locally_defined_names(tree), {"x", "y"})
 
     def test_collects_plain_assignments(self):
         tree = self._parse("x = 1\ny = 2\n")
-        self.assertEqual(_locally_defined_names(tree), {"x", "y"})
+        self.assertEqual(ImportFixer._locally_defined_names(tree), {"x", "y"})
 
     def test_does_not_collect_nested_names(self):
         """Names defined inside a class body are not module-level."""
         tree = self._parse("class Foo:\n    class Bar: ...\n")
-        self.assertEqual(_locally_defined_names(tree), {"Foo"})
+        self.assertEqual(ImportFixer._locally_defined_names(tree), {"Foo"})
 
     def test_empty_module(self):
         tree = self._parse("")
-        self.assertEqual(_locally_defined_names(tree), set())
+        self.assertEqual(ImportFixer._locally_defined_names(tree), set())
 
 
 class TestImportFixer(TestCase):
@@ -283,3 +287,21 @@ class TestImportFixer(TestCase):
             "Expected no [name-defined] errors after fix, got:\n"
             + "\n".join(remaining),
         )
+
+
+class TestImportFixerIsApplicable(TestCase):
+    def setUp(self) -> None:
+        self.fixer = ImportFixer()
+
+    def test_applicable_with_name_defined_error(self):
+        errors = ['f.pyi:1: error: Name "Foo" is not defined  [name-defined]']
+        self.assertTrue(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_without_name_defined(self):
+        errors = [
+            'f.pyi:1: error: Signature of "foo" incompatible with supertype "Base"  [override]'
+        ]
+        self.assertFalse(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_empty(self):
+        self.assertFalse(self.fixer.is_applicable([]))

@@ -304,3 +304,21 @@ class TestAnyBaseFixer(TestCase):
             "Expected no 'has type Any' errors after fix, got:\n"
             + "\n".join(remaining),
         )
+
+
+class TestAnyBaseFixerIsApplicable(TestCase):
+    def setUp(self) -> None:
+        self.fixer = AnyBaseFixer()
+
+    def test_applicable_with_any_base_error(self):
+        errors = [
+            'f.pyi:3: error: Class cannot subclass "Signer" (has type "Any")  [misc]'
+        ]
+        self.assertTrue(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_without_any_base_error(self):
+        errors = ['f.pyi:1: error: Name "Foo" is not defined  [name-defined]']
+        self.assertFalse(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_empty(self):
+        self.assertFalse(self.fixer.is_applicable([]))

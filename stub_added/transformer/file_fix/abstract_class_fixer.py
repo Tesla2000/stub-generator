@@ -1,19 +1,11 @@
 import ast
 import re
+from collections.abc import Iterable
 from pathlib import Path
+from typing import ClassVar
 from typing import Literal
 
 from stub_added.transformer.file_fix._base import ManualFix
-
-_ABSTRACT_RE = re.compile(
-    r'error: Class \S+ has abstract attributes? "[^"]+"  \[misc\]'
-)
-_CLASS_NAME_RE = re.compile(r"error: Class (\S+) has abstract attributes?")
-
-
-def _local_class_name(full_name: str) -> str:
-    """Extract the unqualified class name from a fully-qualified name."""
-    return full_name.rsplit(".", 1)[-1]
 
 
 class _AddAbcMetaTransformer(ast.NodeTransformer):
@@ -43,14 +35,28 @@ class _AddAbcMetaTransformer(ast.NodeTransformer):
 
 class AbstractClassFixer(ManualFix):
     type: Literal["abstract_class"] = "abstract_class"
+    _ABSTRACT_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r'error: Class \S+ has abstract attributes? "[^"]+"  \[misc\]'
+    )
+    _CLASS_NAME_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r"error: Class (\S+) has abstract attributes?"
+    )
+
+    @staticmethod
+    def _local_class_name(full_name: str) -> str:
+        """Extract the unqualified class name from a fully-qualified name."""
+        return full_name.rsplit(".", 1)[-1]
+
+    def is_applicable(self, errors: Iterable[str]) -> bool:
+        return any(self._ABSTRACT_RE.search(e) for e in errors)
 
     def __call__(
         self, contents: str, errors: list[str], stubs_dir: Path | None = None
     ) -> str:
         class_names = {
-            _local_class_name(m.group(1))
+            self._local_class_name(m.group(1))
             for e in errors
-            if (m := _CLASS_NAME_RE.search(e))
+            if (m := self._CLASS_NAME_RE.search(e))
         }
         if not class_names:
             return contents

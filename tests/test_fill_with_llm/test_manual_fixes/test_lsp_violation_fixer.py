@@ -304,3 +304,36 @@ class TestLspViolationFixer(TestCase):
             "Expected no [override] errors after fix, got:\n"
             + "\n".join(remaining),
         )
+
+
+class TestLspViolationFixerIsApplicable(TestCase):
+    def setUp(self) -> None:
+        self.fixer = LspViolationFixer()
+
+    def test_applicable_with_override_error(self):
+        errors = [
+            'f.pyi:1: error: Signature of "foo" incompatible with supertype "Base"  [override]'
+        ]
+        self.assertTrue(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_without_override(self):
+        errors = ['f.pyi:1: error: Name "Foo" is not defined  [name-defined]']
+        self.assertFalse(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_empty(self):
+        self.assertFalse(self.fixer.is_applicable([]))
+
+    def test_applicable_with_return_override_non_coroutine(self):
+        errors = [
+            'f.pyi:1: error: Return type "str" of "foo" incompatible with '
+            'return type "int" in supertype "Base"  [override]'
+        ]
+        self.assertTrue(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_for_coroutine_return_override(self):
+        """Coroutine return errors belong to CoroutineReturnFixer, not LspViolationFixer."""
+        errors = [
+            'f.pyi:5: error: Return type "Coroutine[Any, Any, None]" of "foo" '
+            'incompatible with return type "None" in supertype "Base"  [override]'
+        ]
+        self.assertFalse(self.fixer.is_applicable(errors))

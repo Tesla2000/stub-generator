@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated
 from typing import Literal
@@ -22,6 +23,7 @@ from stub_added.transformer.multifile_fixes._base import MultiFileFix
 
 class LlmFixer(MultiFileFix):
     type: Literal["llm"] = "llm"
+    max_attempts: int = 3
     chat_model: Annotated[
         Union[
             Annotated[ChatGoogleGenerativeAI, Tag(Provider.GEMINI)],
@@ -31,6 +33,9 @@ class LlmFixer(MultiFileFix):
     ] = Field(
         default_factory=lambda: ChatOpenAI(model="gpt-5-nano", temperature=0)
     )
+
+    def is_applicable(self, errors: Iterable[str]) -> bool:
+        return any(True for _ in errors)
 
     def __call__(
         self,
