@@ -51,7 +51,9 @@ repos:
           - pydantic-settings>=2.13.0
           - types-tqdm
           - autoflake
+          - types-grpcio
           - autoimport
+          - aiohttp
           - black
           - isort
           - tomli

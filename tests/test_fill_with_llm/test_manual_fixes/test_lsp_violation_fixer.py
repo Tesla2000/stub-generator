@@ -4,7 +4,7 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_added.transformer.fill_with_llm.manual_fixes.lsp_violation_fixer import (
+from stub_added.transformer.file_fix import (
     LspViolationFixer,
 )
 
@@ -175,6 +175,75 @@ class TestLspViolationFixer(TestCase):
 
             class Sub(HTTPAdapter):
                 def send(self, *args: Any, **kwargs: Any) -> None: ...
+        """)
+        pyi.write_text(stub)
+
+        errors = _mypy_errors(pyi)
+        override_errors = [e for e in errors if "[override]" in e]
+        self.assertTrue(
+            override_errors, "Expected [override] errors before fix"
+        )
+
+        fixed = LspViolationFixer()(stub, errors)
+        pyi.write_text(fixed)
+
+        remaining = [e for e in _mypy_errors(pyi) if "[override]" in e]
+        self.assertFalse(
+            remaining,
+            "Expected no [override] errors after fix, got:\n"
+            + "\n".join(remaining),
+        )
+
+    def test_field_override_ann_assign(self):
+        # AnnAssign field where subclass widens the type
+        src = textwrap.dedent("""\
+            class Base:
+                key_id: str
+            class Sub(Base):
+                key_id: str | None
+        """)
+        errors = [
+            'f.pyi:3: error: Signature of "key_id" incompatible with supertype "Base"  [override]',
+            "f.pyi:3: note:      Superclass:",
+            "f.pyi:3: note:          str",
+            "f.pyi:3: note:      Subclass:",
+            "f.pyi:3: note:          str | None",
+        ]
+        result = LspViolationFixer()(src, errors)
+        # Should narrow back to str (superclass type)
+        self.assertNotIn("str | None", result)
+        self.assertIn("key_id: str", result)
+
+    def test_field_override_property(self):
+        # @property where subclass widens the return type
+        src = textwrap.dedent("""\
+            class Base:
+                @property
+                def key_id(self) -> str: ...
+            class Sub(Base):
+                @property
+                def key_id(self) -> str | None: ...
+        """)
+        errors = [
+            'f.pyi:5: error: Signature of "key_id" incompatible with supertype "Base"  [override]',
+            "f.pyi:5: note:      Superclass:",
+            "f.pyi:5: note:          str",
+            "f.pyi:5: note:      Subclass:",
+            "f.pyi:5: note:          str | None",
+        ]
+        result = LspViolationFixer()(src, errors)
+        self.assertNotIn("str | None", result)
+        self.assertIn("-> str", result)
+
+    def test_field_override_verified_by_mypy(self):
+        pyi = self.tmp_path / "field_override.pyi"
+        stub = textwrap.dedent("""\
+            class Base:
+                @property
+                def key_id(self) -> str: ...
+            class Sub(Base):
+                @property
+                def key_id(self) -> str | None: ...
         """)
         pyi.write_text(stub)
 
