@@ -1,25 +1,11 @@
 import ast
 import re
+from collections.abc import Iterable
 from pathlib import Path
+from typing import ClassVar
 from typing import Literal
 
 from stub_added.transformer.file_fix._base import ManualFix
-
-# error: Definition of "method" in base class "X" is incompatible with
-#        definition in base class "Y"  [misc]
-_MRO_RE = re.compile(
-    r'error: Definition of "(?P<method>[^"]+)" in base class "(?P<base1>[^"]+)" '
-    r'is incompatible with definition in base class "(?P<base2>[^"]+)"'
-)
-
-
-def _base_name(node: ast.expr) -> str:
-    """Return the simple name of a base class expression."""
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        return node.attr
-    return ""
 
 
 class _MroConflictResolver(ast.NodeTransformer):
@@ -30,8 +16,17 @@ class _MroConflictResolver(ast.NodeTransformer):
         self._conflicts = conflicts
         self.changed = False
 
+    @staticmethod
+    def _base_name(node: ast.expr) -> str:
+        """Return the simple name of a base class expression."""
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            return node.attr
+        return ""
+
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
-        base_names = {_base_name(b) for b in node.bases}
+        base_names = {self._base_name(b) for b in node.bases}
         for method, base1, base2 in self._conflicts:
             if base1 not in base_names or base2 not in base_names:
                 continue
@@ -64,6 +59,13 @@ class _MroConflictResolver(ast.NodeTransformer):
 
 class MroConflictFixer(ManualFix):
     type: Literal["mro_conflict"] = "mro_conflict"
+    _MRO_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r'error: Definition of "(?P<method>[^"]+)" in base class "(?P<base1>[^"]+)" '
+        r'is incompatible with definition in base class "(?P<base2>[^"]+)"'
+    )
+
+    def is_applicable(self, errors: Iterable[str]) -> bool:
+        return any(self._MRO_RE.search(e) for e in errors)
 
     def __call__(
         self, contents: str, errors: list[str], stubs_dir: Path | None = None
@@ -71,7 +73,7 @@ class MroConflictFixer(ManualFix):
         conflicts: list[tuple[str, str, str]] = []
         seen: set[tuple[str, str, str]] = set()
         for error in errors:
-            m = _MRO_RE.search(error)
+            m = self._MRO_RE.search(error)
             if not m:
                 continue
             key = (m.group("method"), m.group("base1"), m.group("base2"))

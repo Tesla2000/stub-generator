@@ -160,3 +160,22 @@ class TestCallableToAsyncDef(TestCase):
             "Expected no [assignment] Coroutine errors after fix, got:\n"
             + "\n".join(remaining),
         )
+
+
+class TestCallableToAsyncDefIsApplicable(TestCase):
+    def setUp(self) -> None:
+        self.fixer = CallableToAsyncDef()
+
+    def test_applicable_with_callable_assignment_error(self):
+        errors = [
+            "f.pyi:5: error: Incompatible types in assignment "
+            '(expression has type "Callable[[str], Coroutine[Any, Any, None]]", ...)'
+        ]
+        self.assertTrue(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_without_callable_error(self):
+        errors = ['f.pyi:1: error: Name "Foo" is not defined  [name-defined]']
+        self.assertFalse(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_empty(self):
+        self.assertFalse(self.fixer.is_applicable([]))

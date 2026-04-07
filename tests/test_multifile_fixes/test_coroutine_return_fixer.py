@@ -5,12 +5,6 @@ from pathlib import Path
 from unittest import TestCase
 
 from stub_added.transformer.multifile_fixes._coroutine_return_fixer import (
-    _find_stub_for_module,
-)
-from stub_added.transformer.multifile_fixes._coroutine_return_fixer import (
-    _parse_fixes,
-)
-from stub_added.transformer.multifile_fixes._coroutine_return_fixer import (
     CoroutineReturnFixer,
 )
 
@@ -28,7 +22,7 @@ class TestParseFixes(TestCase):
                 'in supertype "pkg.base.Base"  [override]'
             ]
         }
-        result = _parse_fixes(errors)
+        result = CoroutineReturnFixer._parse_fixes(errors)
         self.assertEqual(
             result, {("pkg.base.Base", "refresh"): "Coroutine[Any, Any, None]"}
         )
@@ -39,7 +33,7 @@ class TestParseFixes(TestCase):
                 'out/pkg/sub.pyi:5: error: Argument 1 of "foo" incompatible  [override]'
             ]
         }
-        self.assertEqual(_parse_fixes(errors), {})
+        self.assertEqual(CoroutineReturnFixer._parse_fixes(errors), {})
 
     def test_first_occurrence_wins(self):
         errors = {
@@ -52,7 +46,7 @@ class TestParseFixes(TestCase):
                 'in supertype "pkg.Base"  [override]',
             ]
         }
-        result = _parse_fixes(errors)
+        result = CoroutineReturnFixer._parse_fixes(errors)
         self.assertEqual(
             result[("pkg.Base", "go")], "Coroutine[Any, Any, None]"
         )
@@ -68,7 +62,7 @@ class TestParseFixes(TestCase):
                 'in supertype "pkg.other.Other"  [override]',
             ]
         }
-        result = _parse_fixes(errors)
+        result = CoroutineReturnFixer._parse_fixes(errors)
         self.assertIn(("pkg.base.Base", "refresh"), result)
         self.assertIn(("pkg.other.Other", "compute"), result)
 
@@ -90,12 +84,16 @@ class TestFindStubForModule(TestCase):
         reference = self.root / "pkg" / "sub" / "child.pyi"
         reference.write_text("")
 
-        result = _find_stub_for_module("pkg.base", reference)
+        result = CoroutineReturnFixer._find_stub_for_module(
+            "pkg.base", reference
+        )
         self.assertEqual(result, base)
 
     def test_returns_none_when_not_found(self):
         reference = self.root / "pkg" / "sub.pyi"
-        result = _find_stub_for_module("pkg.missing", reference)
+        result = CoroutineReturnFixer._find_stub_for_module(
+            "pkg.missing", reference
+        )
         self.assertIsNone(result)
 
 
@@ -415,3 +413,38 @@ class TestCoroutineReturnFixer(TestCase):
             "Expected no [override] errors after fix, got:\n"
             + "\n".join(remaining),
         )
+
+
+class TestCoroutineReturnFixerIsApplicable(TestCase):
+    def setUp(self) -> None:
+        self.fixer = CoroutineReturnFixer()
+
+    def test_applicable_with_return_incompatible_error(self):
+        errors = [
+            'f.pyi:5: error: Return type "Coroutine[Any, Any, None]" of "foo" '
+            'incompatible with return type "None" in supertype "pkg.Base"  [override]'
+        ]
+        self.assertTrue(self.fixer.is_applicable(errors))
+
+    def test_applicable_with_assignment_error(self):
+        errors = [
+            "f.pyi:3: error: Incompatible types in assignment "
+            '(expression has type "Callable[[str], Coroutine[Any, Any, None]]", '
+            'base class "Base" defined the type as "Callable[[str], None]")'
+        ]
+        self.assertTrue(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_without_coroutine_error(self):
+        errors = ['f.pyi:1: error: Name "Foo" is not defined  [name-defined]']
+        self.assertFalse(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_empty(self):
+        self.assertFalse(self.fixer.is_applicable([]))
+
+    def test_not_applicable_for_non_coroutine_return_override(self):
+        """Plain return type override (no Coroutine) belongs to LspViolationFixer."""
+        errors = [
+            'f.pyi:1: error: Return type "str" of "foo" incompatible with '
+            'return type "int" in supertype "Base"  [override]'
+        ]
+        self.assertFalse(self.fixer.is_applicable(errors))

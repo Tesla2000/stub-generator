@@ -1,17 +1,14 @@
 import ast
 import re
+from collections.abc import Iterable
 from pathlib import Path
+from typing import ClassVar
 from typing import Literal
 from typing import Union
 
 from stub_added._stub_tuple import _StubTuple
 from stub_added.transformer._class_finder import find_class_module
 from stub_added.transformer.multifile_fixes._base import MultiFileFix
-
-# error: Class cannot subclass "X" (has type "Any")  [misc]
-_ANY_BASE_RE = re.compile(
-    r':(?P<line>\d+): error: Class cannot subclass "(?P<name>[^"]+)" \(has type "Any"\)'
-)
 
 
 class _BaseRewriter(ast.NodeTransformer):
@@ -68,66 +65,76 @@ class _BaseRewriter(ast.NodeTransformer):
         return node
 
 
-def _ensure_direct_import(
-    tree: ast.Module, name: str, module: str
-) -> ast.Module:
-    """Add ``from <module> import <name>``, replacing any existing import of <name>."""
-    new_body: list[ast.stmt] = []
-    insert_at = 0
-    for i, node in enumerate(tree.body):
-        if isinstance(node, ast.ImportFrom):
-            node.names = [
-                a for a in node.names if a.name != name and a.asname != name
-            ]
-            if not node.names:
-                insert_at = i
-                continue
-            insert_at = i + 1
-        elif isinstance(node, ast.Import):
-            insert_at = i + 1
-        new_body.append(node)
-
-    new_import = ast.ImportFrom(
-        module=module,
-        names=[ast.alias(name=name)],
-        level=0,
-    )
-    new_body.insert(insert_at, new_import)
-    tree.body = new_body
-    return tree
-
-
-def _ensure_module_import(
-    tree: ast.Module, alias: str, parent_module: str
-) -> ast.Module:
-    """Add ``from <parent_module> import <alias>``, replacing any conflicting import."""
-    new_body: list[ast.stmt] = []
-    insert_at = 0
-    for i, node in enumerate(tree.body):
-        if isinstance(node, ast.ImportFrom):
-            node.names = [
-                a for a in node.names if a.asname != alias and a.name != alias
-            ]
-            if not node.names:
-                insert_at = i
-                continue
-            insert_at = i + 1
-        elif isinstance(node, ast.Import):
-            insert_at = i + 1
-        new_body.append(node)
-
-    new_import = ast.ImportFrom(
-        module=parent_module,
-        names=[ast.alias(name=alias)],
-        level=0,
-    )
-    new_body.insert(insert_at, new_import)
-    tree.body = new_body
-    return tree
-
-
 class AnyBaseFixer(MultiFileFix):
     type: Literal["any_base"] = "any_base"
+    _ANY_BASE_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r':(?P<line>\d+): error: Class cannot subclass "(?P<name>[^"]+)" \(has type "Any"\)'
+    )
+
+    @staticmethod
+    def _ensure_direct_import(
+        tree: ast.Module, name: str, module: str
+    ) -> ast.Module:
+        """Add ``from <module> import <name>``, replacing any existing import of <name>."""
+        new_body: list[ast.stmt] = []
+        insert_at = 0
+        for i, node in enumerate(tree.body):
+            if isinstance(node, ast.ImportFrom):
+                node.names = [
+                    a
+                    for a in node.names
+                    if a.name != name and a.asname != name
+                ]
+                if not node.names:
+                    insert_at = i
+                    continue
+                insert_at = i + 1
+            elif isinstance(node, ast.Import):
+                insert_at = i + 1
+            new_body.append(node)
+
+        new_import = ast.ImportFrom(
+            module=module,
+            names=[ast.alias(name=name)],
+            level=0,
+        )
+        new_body.insert(insert_at, new_import)
+        tree.body = new_body
+        return tree
+
+    @staticmethod
+    def _ensure_module_import(
+        tree: ast.Module, alias: str, parent_module: str
+    ) -> ast.Module:
+        """Add ``from <parent_module> import <alias>``, replacing any conflicting import."""
+        new_body: list[ast.stmt] = []
+        insert_at = 0
+        for i, node in enumerate(tree.body):
+            if isinstance(node, ast.ImportFrom):
+                node.names = [
+                    a
+                    for a in node.names
+                    if a.asname != alias and a.name != alias
+                ]
+                if not node.names:
+                    insert_at = i
+                    continue
+                insert_at = i + 1
+            elif isinstance(node, ast.Import):
+                insert_at = i + 1
+            new_body.append(node)
+
+        new_import = ast.ImportFrom(
+            module=parent_module,
+            names=[ast.alias(name=alias)],
+            level=0,
+        )
+        new_body.insert(insert_at, new_import)
+        tree.body = new_body
+        return tree
+
+    def is_applicable(self, errors: Iterable[str]) -> bool:
+        return any(self._ANY_BASE_RE.search(e) for e in errors)
 
     def __call__(
         self,
@@ -147,7 +154,7 @@ class AnyBaseFixer(MultiFileFix):
         source_tree = ast.parse(source_text)
 
         for error in errors:
-            m = _ANY_BASE_RE.search(error)
+            m = self._ANY_BASE_RE.search(error)
             if not m:
                 continue
             lineno = int(m.group("line"))
@@ -169,9 +176,9 @@ class AnyBaseFixer(MultiFileFix):
             return
 
         for name, module in rewriter.direct_imports.items():
-            tree = _ensure_direct_import(tree, name, module)
+            tree = self._ensure_direct_import(tree, name, module)
         for alias, parent in rewriter.module_imports.items():
-            tree = _ensure_module_import(tree, alias, parent)
+            tree = self._ensure_module_import(tree, alias, parent)
 
         ast.fix_missing_locations(tree)
         pyi.write_text(ast.unparse(tree))

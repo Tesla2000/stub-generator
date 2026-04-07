@@ -5,7 +5,6 @@ from typing import Union
 
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic import PositiveInt
 from stub_added._stub_tuple import _StubTuple
 from stub_added.transformer._mypy import run_mypy
 from stub_added.transformer._stub_tuples import _StubTuples
@@ -39,7 +38,6 @@ AnyFix = Annotated[
 
 class FixMypy(BaseModel):
     type: Literal[TransformerType.FIX_MYPY] = TransformerType.FIX_MYPY
-    max_mypy_fix_iterations: PositiveInt = 5
     fixes: tuple[AnyFix, ...] = Field(
         default_factory=lambda: (
             AnyBaseFixer(),
@@ -76,40 +74,39 @@ class FixMypy(BaseModel):
     ) -> None:
         pyi_paths = [s.pyi_path for s in layer]
         stub_by_path = {s.pyi_path: s for s in layer}
+        attempts: dict[str, int] = {fix.type: 0 for fix in self.fixes}
 
-        for _ in range(self.max_mypy_fix_iterations):
+        while True:
             errors_by_file = run_mypy(pyi_paths, stubs_dir)
             if not errors_by_file:
                 return
 
+            all_errors = [
+                e for errors in errors_by_file.values() for e in errors
+            ]
             affected_stubs = list(
                 filter(None, map(stub_by_path.get, errors_by_file))
             )
-            for fix in self.fixes:
-                if fix.scope == "file":
-                    for pyi, errors in errors_by_file.items():
-                        contents = fix(
-                            contents=pyi.read_text(),
-                            errors=errors,
-                            stubs_dir=stubs_dir,
-                        )
-                        pyi.write_text(contents)
-                else:
-                    fix(
-                        affected_stubs,
-                        errors_by_file,
-                        completed,
-                        layer_deps,
-                        stubs_dir,
-                    )
 
-                errors_by_file = run_mypy(pyi_paths, stubs_dir)
-                if not errors_by_file:
-                    return
-                affected_stubs = list(
-                    filter(None, map(stub_by_path.get, errors_by_file))
+            fix = next(
+                (
+                    fix
+                    for fix in self.fixes
+                    if not fix.is_applicable(all_errors)
+                ),
+                None,
+            )
+            if fix is None:
+                raise ValueError(f"No fix applicable for {all_errors=}")
+            if attempts[fix.type] >= fix.max_attempts:
+                raise ValueError(
+                    f"Fix {fix.type!r} exhausted {fix.max_attempts} attempts.\n{errors_by_file=}"
                 )
-
-        raise ValueError(
-            f"Failed to fix all mypy issues in {self.max_mypy_fix_iterations} iterations.\n{errors_by_file=}"
-        )
+            attempts[fix.type] += 1
+            fix.apply(
+                affected_stubs,
+                errors_by_file,
+                completed,
+                layer_deps,
+                stubs_dir,
+            )

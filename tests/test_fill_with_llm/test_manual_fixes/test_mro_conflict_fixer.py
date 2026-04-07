@@ -146,3 +146,21 @@ class TestMroConflictFixer(TestCase):
             "Expected no [misc] errors after fix, got:\n"
             + "\n".join(remaining),
         )
+
+
+class TestMroConflictFixerIsApplicable(TestCase):
+    def setUp(self) -> None:
+        self.fixer = MroConflictFixer()
+
+    def test_applicable_with_mro_error(self):
+        errors = [
+            'f.pyi:1: error: Definition of "foo" in base class "A" is incompatible with definition in base class "B"  [misc]'
+        ]
+        self.assertTrue(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_without_mro_error(self):
+        errors = ['f.pyi:1: error: Name "Foo" is not defined  [name-defined]']
+        self.assertFalse(self.fixer.is_applicable(errors))
+
+    def test_not_applicable_empty(self):
+        self.assertFalse(self.fixer.is_applicable([]))
