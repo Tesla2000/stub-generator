@@ -8,13 +8,15 @@ from typing import Literal
 
 import autoimport
 import mypy
-from stub_added.transformer.fill_with_llm.manual_fixes._base import ManualFix
+from stub_added.transformer._class_finder import find_class_module
+from stub_added.transformer._class_finder import find_name_in_supertype_stubs
+from stub_added.transformer.file_fix._base import ManualFix
 
 _BUILTIN_NAMES: frozenset[str] = frozenset(vars(builtins))
 
 _NAME_DEFINED_RE = re.compile(r'error: Name "(?P<name>[^"]+)" is not defined')
 _SUPERTYPE_RE = re.compile(
-    r'incompatible with supertype "(?P<supertype>[^"]+)"'
+    r'(?:incompatible with supertype|in supertype) "(?P<supertype>[^"]+)"'
 )
 
 
@@ -105,18 +107,72 @@ def resolve_missing_imports(code: str, errors: list[str]) -> str:
     )
 
 
-def resolve_annotation_imports(code: str, errors: list[str]) -> str:
+def resolve_annotation_imports(
+    code: str, errors: list[str], stubs_dir: Path | None = None
+) -> str:
     """Add imports for all names used in annotations that are not yet imported.
     Used after AST fixes that introduce new type names without corresponding imports.
+    Raises RuntimeError if any annotation name cannot be resolved.
     """
     code = autoimport.fix_code(code)
     tree = ast.parse(code)
     undefined = (
         _annotation_names(tree) - _imported_names(tree) - _BUILTIN_NAMES
     )
-    return _add_missing_imports(
+    code = _add_missing_imports(
         code, undefined, _supertype_candidate_modules(errors)
     )
+
+    # Fallback: follow import chain in stubs to locate still-undefined names
+    if stubs_dir is not None:
+        tree = ast.parse(code)
+        still_undefined = (
+            _annotation_names(tree) - _imported_names(tree) - _BUILTIN_NAMES
+        )
+        supertype_modules = _supertype_candidate_modules(errors)
+        for name in still_undefined:
+            # First try: follow the import chain from the current file
+            module = find_class_module(name, tree, stubs_dir)
+            # Second try: look at how the name appears in supertype stubs
+            if module is None:
+                module = find_name_in_supertype_stubs(
+                    name, supertype_modules, stubs_dir
+                )
+            if module is not None:
+                code = f"from {module} import {name}\n" + code
+
+    # Final check — raise if anything remains unresolved
+    tree = ast.parse(code)
+    unresolved = (
+        _annotation_names(tree)
+        - _imported_names(tree)
+        - _BUILTIN_NAMES
+        - _locally_defined_names(tree)
+    )
+    if unresolved:
+        raise RuntimeError(
+            f"Could not resolve annotation imports: {unresolved}"
+        )
+    return code
+
+
+def _locally_defined_names(tree: ast.Module) -> set[str]:
+    """Return names defined at module level (classes, functions, assignments)."""
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(
+            node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
+            names.add(node.name)
+        elif isinstance(node, ast.AnnAssign) and isinstance(
+            node.target, ast.Name
+        ):
+            names.add(node.target.id)
+        elif isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    names.add(t.id)
+    return names
 
 
 def _annotation_names(tree: ast.Module) -> set[str]:
@@ -149,7 +205,9 @@ def _annotation_names(tree: ast.Module) -> set[str]:
 class ImportFixer(ManualFix):
     type: Literal["import"] = "import"
 
-    def __call__(self, contents: str, errors: list[str]) -> str:
+    def __call__(
+        self, contents: str, errors: list[str], stubs_dir: Path | None = None
+    ) -> str:
         if not any(_NAME_DEFINED_RE.search(e) for e in errors):
             return contents
         return resolve_missing_imports(contents, errors)

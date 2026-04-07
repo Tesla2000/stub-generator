@@ -4,11 +4,11 @@ from pathlib import Path
 from unittest import TestCase
 
 from stub_added._stub_tuple import _StubTuple
-from stub_added.transformer.fill_with_llm._topo import build_module_map
-from stub_added.transformer.fill_with_llm._topo import find_cycle
-from stub_added.transformer.fill_with_llm._topo import internal_imports
-from stub_added.transformer.fill_with_llm._topo import pyi_to_deps
-from stub_added.transformer.fill_with_llm._topo import topo_layers
+from stub_added.transformer._topo import build_module_map
+from stub_added.transformer._topo import find_cycle
+from stub_added.transformer._topo import internal_imports
+from stub_added.transformer._topo import pyi_to_deps
+from stub_added.transformer._topo import topo_layers
 
 
 def _make_stubs(tmp_path: Path, files: dict[str, str]) -> list[_StubTuple]:

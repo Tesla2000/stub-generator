@@ -3,5 +3,5 @@ from enum import StrEnum
 
 
 class TransformerType(StrEnum):
-    FILL_WITH_LLM = auto()
+    FIX_MYPY = auto()
     NO_OP = auto()

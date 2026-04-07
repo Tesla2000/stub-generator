@@ -9,8 +9,7 @@ from pydantic_settings import CliApp
 from pydantic_settings import SettingsConfigDict
 from stub_added.input import AnyInput
 from stub_added.output import AnyOutput
-from stub_added.transformer import AnyTransformer
-from stub_added.transformer.no_op_transformer import NoOpTransformer
+from stub_added.transformer import FixMypy
 
 
 class Main(BaseSettings):
@@ -25,7 +24,7 @@ class Main(BaseSettings):
     )
 
     input: AnyInput
-    transformer: AnyTransformer = Field(default_factory=NoOpTransformer)
+    transformer: FixMypy = Field(default_factory=FixMypy)
     outputs: tuple[AnyOutput, ...] = Field(min_length=1)
 
     async def cli_cmd(self) -> None:

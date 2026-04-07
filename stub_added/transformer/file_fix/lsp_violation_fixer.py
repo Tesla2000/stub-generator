@@ -1,9 +1,10 @@
 import ast
 import re
+from pathlib import Path
 from typing import Literal
 
-from stub_added.transformer.fill_with_llm.manual_fixes._base import ManualFix
-from stub_added.transformer.fill_with_llm.manual_fixes.import_fixer import (
+from stub_added.transformer.file_fix._base import ManualFix
+from stub_added.transformer.file_fix.import_fixer import (
     resolve_annotation_imports,
 )
 
@@ -24,6 +25,14 @@ _SIG_RE = re.compile(
     r'error: Signature of "(?P<method>[^"]+)" incompatible with supertype'
 )
 _DEF_NOTE_RE = re.compile(r"note:\s+def \w+\(")
+_TYPE_NOTE_RE = re.compile(r"note:\s+\S")
+
+# Format 4: field/property errors
+# error: Signature of "name" incompatible with supertype "X"  [override]
+# note:      Superclass:
+# note:          <type>    (not a def line)
+# note:      Subclass:
+# note:          <type>
 
 # Format 3: return type errors
 # error: Return type "X" of "method" incompatible with return type "Y" in supertype "Z"
@@ -231,15 +240,85 @@ def _args_with_defaults(
     return set(non_self[len(non_self) - n_defaults :])
 
 
+def _parse_field_fixes(errors: list[str]) -> dict[str, ast.expr]:
+    """Format 4: field/property name → supertype annotation (non-def signature mismatch)."""
+    result: dict[str, ast.expr] = {}
+    i = 0
+    while i < len(errors):
+        sig_m = _SIG_RE.search(errors[i])
+        if not sig_m:
+            i += 1
+            continue
+        name = sig_m.group("method")
+        j = i + 1
+        while j < len(errors) and not _SIG_RE.search(errors[j]):
+            if "Superclass:" in errors[j]:
+                candidate = j + 1
+                if (
+                    candidate < len(errors)
+                    and _TYPE_NOTE_RE.search(errors[candidate])
+                    and not _DEF_NOTE_RE.search(errors[candidate])
+                ):
+                    type_str = re.sub(
+                        r"^[^:]+:\d+: note:\s+", "", errors[candidate]
+                    ).strip()
+                    if name not in result:
+                        try:
+                            result[name] = ast.parse(
+                                type_str, mode="eval"
+                            ).body
+                        except SyntaxError:
+                            pass
+                break
+            j += 1
+        i += 1
+    return result
+
+
+class _FieldFixer(ast.NodeTransformer):
+    """Fix AnnAssign and @property return types to match superclass."""
+
+    def __init__(self, fixes: dict[str, ast.expr]) -> None:
+        self._fixes = fixes
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
+        self.generic_visit(node)
+        if isinstance(node.target, ast.Name) and node.target.id in self._fixes:
+            node.annotation = self._fixes[node.target.id]
+        return node
+
+    def _fix(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        self.generic_visit(node)
+        if node.name not in self._fixes:
+            return node
+        # Only fix if it's a property (has @property decorator)
+        is_property = any(
+            (isinstance(d, ast.Name) and d.id == "property")
+            or (isinstance(d, ast.Attribute) and d.attr == "property")
+            for d in node.decorator_list
+        )
+        if is_property:
+            node.returns = self._fixes[node.name]
+        return node
+
+    visit_FunctionDef = _fix
+    visit_AsyncFunctionDef = _fix  # type: ignore[assignment]
+
+
 class LspViolationFixer(ManualFix):
     type: Literal["lsp"] = "lsp"
 
-    def __call__(self, contents: str, errors: list[str]) -> str:
+    def __call__(
+        self, contents: str, errors: list[str], stubs_dir: Path | None = None
+    ) -> str:
         positional = _parse_positional_fixes(errors)
         named = _parse_signature_fixes(errors)
         returns = _parse_return_fixes(errors)
+        all_field_fixes = _parse_field_fixes(errors)
+        # Exclude names already handled as method signatures
+        fields = {k: v for k, v in all_field_fixes.items() if k not in named}
 
-        if not positional and not named and not returns:
+        if not positional and not named and not returns and not fields:
             return contents
 
         tree = ast.parse(contents)
@@ -249,5 +328,7 @@ class LspViolationFixer(ManualFix):
             tree = _SignatureFixer(named).visit(tree)
         if returns:
             tree = _ReturnTypeFixer(returns).visit(tree)
+        if fields:
+            tree = _FieldFixer(fields).visit(tree)
         ast.fix_missing_locations(tree)
-        return resolve_annotation_imports(ast.unparse(tree), errors)
+        return resolve_annotation_imports(ast.unparse(tree), errors, stubs_dir)

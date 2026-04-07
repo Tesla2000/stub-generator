@@ -4,7 +4,7 @@ from unittest import TestCase
 
 from pydantic import HttpUrl
 from stub_added.input.stub_generator import StubGenerator
-from stub_added.transformer.fill_with_llm._topo import topo_layers
+from stub_added.transformer._topo import topo_layers
 
 
 class TestIntegrationGoogleAuth(TestCase):
