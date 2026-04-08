@@ -21,6 +21,7 @@ class PyrightConfig(BaseModel):
     )
 
     # Mirrors typeshed's pyrightconfig.json defaults
+    typeshed_path: str | None = None
     type_checking_mode: Literal["off", "basic", "standard", "strict"] = (
         "strict"
     )
@@ -50,16 +51,15 @@ class Pyright(BaseModel):
     type: Literal["pyright"] = "pyright"
     config: PyrightConfig = PyrightConfig()
 
-    def _build_config(self, stubs_dir: Path) -> dict:
-        return {
-            "typeshedPath": str(stubs_dir),
-            **self.config.model_dump(by_alias=True),
-        }
+    def _build_config(self) -> dict:
+        return self.config.model_dump(by_alias=True, exclude_none=True)
 
     def generate(
         self, pyi_paths: list[Path], stubs_dir: Path
     ) -> dict[Path, list[str]]:
         """Run pyright and return per-file error lines for files with errors."""
+        pyi_paths = [p.resolve() for p in pyi_paths]
+        stubs_dir = stubs_dir.resolve()
         env = os.environ.copy()
         existing = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = (
@@ -70,7 +70,7 @@ class Pyright(BaseModel):
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
         ) as cfg_file:
-            json.dump(self._build_config(stubs_dir), cfg_file)
+            json.dump(self._build_config(), cfg_file)
             cfg_path = cfg_file.name
         try:
             result = subprocess.run(

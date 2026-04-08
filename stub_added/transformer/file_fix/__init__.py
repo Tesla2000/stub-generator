@@ -14,6 +14,9 @@ from stub_added.transformer.file_fix.lsp_violation_fixer import (
     LspViolationFixer,
 )
 from stub_added.transformer.file_fix.mro_conflict_fixer import MroConflictFixer
+from stub_added.transformer.file_fix.pyright_attribute_fixer import (
+    PyrightAttributeFixer,
+)
 
 AnyManualFix = Annotated[
     Union[
@@ -22,6 +25,7 @@ AnyManualFix = Annotated[
         MroConflictFixer,
         CallableToAsyncDef,
         AbstractClassFixer,
+        PyrightAttributeFixer,
     ],
     Field(discriminator="type"),
 ]
@@ -34,4 +38,5 @@ __all__ = [
     "ImportFixer",
     "LspViolationFixer",
     "MroConflictFixer",
+    "PyrightAttributeFixer",
 ]
