@@ -1,22 +1,63 @@
 import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import ClassVar
 from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
+from pydantic.alias_generators import to_camel
+
+DiagnosticRule = Literal["error", "warning", "information", "none"]
+
+
+class PyrightConfig(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        frozen=True,
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    # Mirrors typeshed's pyrightconfig.json defaults
+    type_checking_mode: Literal["off", "basic", "standard", "strict"] = (
+        "strict"
+    )
+    report_incomplete_stub: DiagnosticRule = "none"
+    report_missing_parameter_type: DiagnosticRule = "none"
+    report_unknown_member_type: DiagnosticRule = "none"
+    report_unknown_parameter_type: DiagnosticRule = "none"
+    report_unknown_variable_type: DiagnosticRule = "none"
+    report_call_in_default_initializer: DiagnosticRule = "error"
+    report_unnecessary_type_ignore_comment: DiagnosticRule = "error"
+    enable_type_ignore_comments: bool = False
+    report_missing_super_call: DiagnosticRule = "none"
+    report_uninitialized_instance_variable: DiagnosticRule = "none"
+    report_private_usage: DiagnosticRule = "none"
+    report_missing_module_source: DiagnosticRule = "none"
+    report_incompatible_method_override: DiagnosticRule = "none"
+    report_incompatible_variable_override: DiagnosticRule = "none"
+    report_property_type_mismatch: DiagnosticRule = "none"
+    report_overlapping_overload: DiagnosticRule = "none"
+    report_self_cls_parameter_name: DiagnosticRule = "none"
+    report_deprecated: DiagnosticRule = "none"
 
 
 class Pyright(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
 
     type: Literal["pyright"] = "pyright"
+    config: PyrightConfig = PyrightConfig()
 
-    @staticmethod
+    def _build_config(self, stubs_dir: Path) -> dict:
+        return {
+            "typeshedPath": str(stubs_dir),
+            **self.config.model_dump(by_alias=True),
+        }
+
     def generate(
-        pyi_paths: list[Path], stubs_dir: Path
+        self, pyi_paths: list[Path], stubs_dir: Path
     ) -> dict[Path, list[str]]:
         """Run pyright and return per-file error lines for files with errors."""
         env = os.environ.copy()
@@ -26,12 +67,21 @@ class Pyright(BaseModel):
             if not existing
             else f"{stubs_dir}{os.pathsep}{existing}"
         )
-        result = subprocess.run(
-            ["pyright", "--outputjson"] + list(map(str, pyi_paths)),
-            capture_output=True,
-            text=True,
-            env=env,
-        )
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as cfg_file:
+            json.dump(self._build_config(stubs_dir), cfg_file)
+            cfg_path = cfg_file.name
+        try:
+            result = subprocess.run(
+                ["pyright", "--outputjson", "--project", cfg_path]
+                + list(map(str, pyi_paths)),
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+        finally:
+            Path(cfg_path).unlink(missing_ok=True)
         try:
             data = json.loads(result.stdout)
         except json.JSONDecodeError:
