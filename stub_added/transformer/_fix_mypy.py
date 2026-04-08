@@ -1,3 +1,4 @@
+from collections import defaultdict
 from pathlib import Path
 from typing import Annotated
 from typing import Literal
@@ -6,10 +7,12 @@ from typing import Union
 from pydantic import BaseModel
 from pydantic import Field
 from stub_added._stub_tuple import _StubTuple
-from stub_added.transformer._mypy import run_mypy
 from stub_added.transformer._stub_tuples import _StubTuples
 from stub_added.transformer._topo import pyi_to_deps
 from stub_added.transformer._topo import topo_layers
+from stub_added.transformer.error_generator import AnyGenerator
+from stub_added.transformer.error_generator import Mypy
+from stub_added.transformer.error_generator import Pyright
 from stub_added.transformer.file_fix import AbstractClassFixer
 from stub_added.transformer.file_fix import CallableToAsyncDef
 from stub_added.transformer.file_fix import ImportFixer
@@ -38,6 +41,7 @@ AnyFix = Annotated[
 
 class FixMypy(BaseModel):
     type: Literal[TransformerType.FIX_MYPY] = TransformerType.FIX_MYPY
+    error_generators: tuple[AnyGenerator, ...] = (Mypy(), Pyright())
     fixes: tuple[AnyFix, ...] = Field(
         default_factory=lambda: (
             AnyBaseFixer(),
@@ -65,6 +69,17 @@ class FixMypy(BaseModel):
             for s in layer:
                 completed[s.pyi_path] = s.pyi_path.read_text()
 
+    def _generate_errors(
+        self, pyi_paths: list[Path], stubs_dir: Path
+    ) -> dict[Path, list[str]]:
+        errors_by_file: dict[Path, list[str]] = defaultdict(list)
+        for generator in self.error_generators:
+            for path, errors in generator.generate(
+                pyi_paths, stubs_dir
+            ).items():
+                errors_by_file[path].extend(errors)
+        return errors_by_file
+
     def _fix_mypy_errors(
         self,
         layer: list[_StubTuple],
@@ -77,7 +92,7 @@ class FixMypy(BaseModel):
         attempts: dict[str, int] = {fix.type: 0 for fix in self.fixes}
 
         while True:
-            errors_by_file = run_mypy(pyi_paths, stubs_dir)
+            errors_by_file = self._generate_errors(pyi_paths, stubs_dir)
             if not errors_by_file:
                 return
 

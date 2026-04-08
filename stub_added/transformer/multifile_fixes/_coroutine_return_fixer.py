@@ -6,7 +6,7 @@ from typing import ClassVar
 from typing import Literal
 
 from stub_added._stub_tuple import _StubTuple
-from stub_added.transformer._mypy import run_mypy
+from stub_added.transformer.error_generator import Mypy
 from stub_added.transformer.multifile_fixes._base import MultiFileFix
 
 
@@ -272,7 +272,7 @@ class CoroutineReturnFixer(MultiFileFix):
 
         # Propagate up: if widening caused new override errors in the parent,
         # fix those too recursively.
-        upstream_errors = run_mypy([parent_path], stubs_dir)
+        upstream_errors = Mypy().generate([parent_path], stubs_dir)
         if upstream_errors:
             upstream_fixes = self._parse_fixes(upstream_errors)
             by_grandparent: dict[str, dict[str, str]] = {}
