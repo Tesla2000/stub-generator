@@ -18,6 +18,7 @@ from stub_added.transformer.file_fix import CallableToAsyncDef
 from stub_added.transformer.file_fix import ImportFixer
 from stub_added.transformer.file_fix import LspViolationFixer
 from stub_added.transformer.file_fix import MroConflictFixer
+from stub_added.transformer.file_fix import PyrightAttributeFixer
 from stub_added.transformer.multifile_fixes import AnyBaseFixer
 from stub_added.transformer.multifile_fixes import CoroutineReturnFixer
 from stub_added.transformer.multifile_fixes import LlmFixer
@@ -27,6 +28,7 @@ from tqdm import tqdm
 AnyFix = Annotated[
     Union[
         LspViolationFixer,
+        PyrightAttributeFixer,
         ImportFixer,
         MroConflictFixer,
         CallableToAsyncDef,
@@ -39,11 +41,15 @@ AnyFix = Annotated[
 ]
 
 
-class FixMypy(BaseModel):
+class FixErrors(BaseModel):
     type: Literal[TransformerType.FIX_MYPY] = TransformerType.FIX_MYPY
-    error_generators: tuple[AnyGenerator, ...] = (Mypy(), Pyright())
+    error_generators: tuple[AnyGenerator, ...] = (
+        Mypy(),
+        Pyright(),
+    )
     fixes: tuple[AnyFix, ...] = Field(
         default_factory=lambda: (
+            PyrightAttributeFixer(),
             AnyBaseFixer(),
             LspViolationFixer(),
             ImportFixer(),
@@ -104,11 +110,7 @@ class FixMypy(BaseModel):
             )
 
             fix = next(
-                (
-                    fix
-                    for fix in self.fixes
-                    if not fix.is_applicable(all_errors)
-                ),
+                (fix for fix in self.fixes if fix.is_applicable(all_errors)),
                 None,
             )
             if fix is None:

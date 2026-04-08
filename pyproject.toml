@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-settings>=2.13.0",
     "pygithub>=2.9.0",
     "pyright>=1.1.408",
+    "pyupgrade>=3.21.2",
     "tomli>=2.4.1",
     "tqdm>=4.67.3",
     "types-grpcio>=1.0.0.20251009",

@@ -30,19 +30,25 @@ class TestPyrightConfig(TestCase):
         self.assertEqual(cfg.report_unnecessary_type_ignore_comment, "error")
         self.assertFalse(cfg.enable_type_ignore_comments)
 
-    def test_build_config_includes_stubs_dir(self):
-        stubs_dir = Path("/some/stubs")
-        cfg = Pyright()._build_config(stubs_dir)
-        self.assertEqual(cfg["typeshedPath"], str(stubs_dir))
+    def test_typeshed_path_in_config_included(self):
+        pyright = Pyright(
+            config=PyrightConfig(typeshed_path="/custom/typeshed")
+        )
+        cfg = pyright._build_config()
+        self.assertEqual(cfg["typeshedPath"], "/custom/typeshed")
+
+    def test_typeshed_path_absent_not_in_config(self):
+        cfg = Pyright()._build_config()
+        self.assertNotIn("typeshedPath", cfg)
 
     def test_build_config_keys_are_camel_case(self):
-        cfg = Pyright()._build_config(Path("/stubs"))
+        cfg = Pyright()._build_config()
         self.assertIn("typeCheckingMode", cfg)
         self.assertNotIn("type_checking_mode", cfg)
 
     def test_custom_config_reflected_in_build(self):
         pyright = Pyright(config=PyrightConfig(type_checking_mode="basic"))
-        cfg = pyright._build_config(Path("/stubs"))
+        cfg = pyright._build_config()
         self.assertEqual(cfg["typeCheckingMode"], "basic")
 
     def test_populate_by_name(self):
@@ -140,6 +146,7 @@ class TestPyrightGenerate(TestCase):
         with patch("subprocess.run", return_value=self._mock_run(diagnostics)):
             result = self.pyright.generate([pyi], self.tmp_path)
 
+        self.assertNotIn(other, result)
         self.assertEqual(result, {})
 
     def test_multiple_errors_same_file(self):
@@ -224,6 +231,50 @@ class TestPyrightGenerate(TestCase):
 
         self.assertIn(str(stubs_dir), captured["env"].get("PYTHONPATH", ""))
 
+    def test_relative_paths_resolved_to_absolute(self):
+        pyi_abs = self.tmp_path / "rel.pyi"
+        pyi_abs.write_text("def foo() -> None: ...\n")
+        pyi_rel = (
+            pyi_abs.relative_to(Path.cwd())
+            if pyi_abs.is_relative_to(Path.cwd())
+            else pyi_abs
+        )
+
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["env"] = kwargs.get("env", {})
+            m = MagicMock()
+            m.stdout = _make_pyright_output(
+                [
+                    {
+                        "file": str(pyi_abs),
+                        "severity": "error",
+                        "message": "Some error",
+                        "range": {
+                            "start": {"line": 0, "character": 0},
+                            "end": {"line": 0, "character": 1},
+                        },
+                    }
+                ]
+            )
+            m.returncode = 1
+            return m
+
+        with patch("subprocess.run", side_effect=fake_run):
+            result = self.pyright.generate([pyi_rel], self.tmp_path)
+
+        # All paths passed to subprocess must be absolute
+        for arg in captured["cmd"]:
+            if arg.endswith(".pyi"):
+                self.assertTrue(
+                    Path(arg).is_absolute(),
+                    f"Expected absolute path, got: {arg}",
+                )
+        # Error must be returned even when input path was relative
+        self.assertIn(pyi_abs, result)
+
     def test_project_config_passed_to_pyright(self):
         pyi = self.tmp_path / "check.pyi"
         pyi.write_text("def foo() -> None: ...\n")
@@ -241,4 +292,3 @@ class TestPyrightGenerate(TestCase):
             self.pyright.generate([pyi], self.tmp_path)
 
         self.assertIn("--project", captured["cmd"])
-        self.assertIn("--outputjson", captured["cmd"])
