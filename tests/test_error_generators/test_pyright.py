@@ -6,16 +6,55 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from stub_added.transformer.error_generator import Pyright
+from stub_added.transformer.error_generator._pyright import PyrightConfig
 
 
 def _make_pyright_output(diagnostics: list[dict]) -> str:
     return json.dumps({"generalDiagnostics": diagnostics})
 
 
+class TestPyrightConfig(TestCase):
+    def test_serializes_to_camel_case(self):
+        cfg = PyrightConfig().model_dump(by_alias=True)
+        self.assertIn("typeCheckingMode", cfg)
+        self.assertIn("reportIncompleteStub", cfg)
+        self.assertIn("enableTypeIgnoreComments", cfg)
+        self.assertNotIn("type_checking_mode", cfg)
+        self.assertNotIn("report_incomplete_stub", cfg)
+
+    def test_default_values_match_typeshed(self):
+        cfg = PyrightConfig()
+        self.assertEqual(cfg.type_checking_mode, "strict")
+        self.assertEqual(cfg.report_incomplete_stub, "none")
+        self.assertEqual(cfg.report_call_in_default_initializer, "error")
+        self.assertEqual(cfg.report_unnecessary_type_ignore_comment, "error")
+        self.assertFalse(cfg.enable_type_ignore_comments)
+
+    def test_build_config_includes_stubs_dir(self):
+        stubs_dir = Path("/some/stubs")
+        cfg = Pyright()._build_config(stubs_dir)
+        self.assertEqual(cfg["typeshedPath"], str(stubs_dir))
+
+    def test_build_config_keys_are_camel_case(self):
+        cfg = Pyright()._build_config(Path("/stubs"))
+        self.assertIn("typeCheckingMode", cfg)
+        self.assertNotIn("type_checking_mode", cfg)
+
+    def test_custom_config_reflected_in_build(self):
+        pyright = Pyright(config=PyrightConfig(type_checking_mode="basic"))
+        cfg = pyright._build_config(Path("/stubs"))
+        self.assertEqual(cfg["typeCheckingMode"], "basic")
+
+    def test_populate_by_name(self):
+        cfg = PyrightConfig(type_checking_mode="off")
+        self.assertEqual(cfg.type_checking_mode, "off")
+
+
 class TestPyrightGenerate(TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmp.name)
+        self.pyright = Pyright()
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -33,7 +72,7 @@ class TestPyrightGenerate(TestCase):
         with patch(
             "subprocess.run", return_value=self._mock_run([], returncode=0)
         ):
-            result = Pyright.generate([pyi], self.tmp_path)
+            result = self.pyright.generate([pyi], self.tmp_path)
 
         self.assertEqual(result, {})
 
@@ -55,7 +94,7 @@ class TestPyrightGenerate(TestCase):
             }
         ]
         with patch("subprocess.run", return_value=self._mock_run(diagnostics)):
-            result = Pyright.generate([pyi], self.tmp_path)
+            result = self.pyright.generate([pyi], self.tmp_path)
 
         self.assertIn(pyi, result)
         self.assertEqual(len(result[pyi]), 1)
@@ -78,7 +117,7 @@ class TestPyrightGenerate(TestCase):
             }
         ]
         with patch("subprocess.run", return_value=self._mock_run(diagnostics)):
-            result = Pyright.generate([pyi], self.tmp_path)
+            result = self.pyright.generate([pyi], self.tmp_path)
 
         self.assertEqual(result, {})
 
@@ -99,9 +138,8 @@ class TestPyrightGenerate(TestCase):
             }
         ]
         with patch("subprocess.run", return_value=self._mock_run(diagnostics)):
-            result = Pyright.generate([pyi], self.tmp_path)
+            result = self.pyright.generate([pyi], self.tmp_path)
 
-        self.assertNotIn(other, result)
         self.assertEqual(result, {})
 
     def test_multiple_errors_same_file(self):
@@ -129,7 +167,7 @@ class TestPyrightGenerate(TestCase):
             },
         ]
         with patch("subprocess.run", return_value=self._mock_run(diagnostics)):
-            result = Pyright.generate([pyi], self.tmp_path)
+            result = self.pyright.generate([pyi], self.tmp_path)
 
         self.assertIn(pyi, result)
         self.assertEqual(len(result[pyi]), 2)
@@ -150,7 +188,7 @@ class TestPyrightGenerate(TestCase):
             }
         ]
         with patch("subprocess.run", return_value=self._mock_run(diagnostics)):
-            result = Pyright.generate([pyi], self.tmp_path)
+            result = self.pyright.generate([pyi], self.tmp_path)
 
         self.assertIn(":3:", result[pyi][0])
 
@@ -163,7 +201,7 @@ class TestPyrightGenerate(TestCase):
         mock.returncode = 1
 
         with patch("subprocess.run", return_value=mock):
-            result = Pyright.generate([pyi], self.tmp_path)
+            result = self.pyright.generate([pyi], self.tmp_path)
 
         self.assertEqual(result, {})
 
@@ -182,6 +220,25 @@ class TestPyrightGenerate(TestCase):
             return m
 
         with patch("subprocess.run", side_effect=fake_run):
-            Pyright.generate([pyi], stubs_dir)
+            self.pyright.generate([pyi], stubs_dir)
 
         self.assertIn(str(stubs_dir), captured["env"].get("PYTHONPATH", ""))
+
+    def test_project_config_passed_to_pyright(self):
+        pyi = self.tmp_path / "check.pyi"
+        pyi.write_text("def foo() -> None: ...\n")
+
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            m = MagicMock()
+            m.stdout = _make_pyright_output([])
+            m.returncode = 0
+            return m
+
+        with patch("subprocess.run", side_effect=fake_run):
+            self.pyright.generate([pyi], self.tmp_path)
+
+        self.assertIn("--project", captured["cmd"])
+        self.assertIn("--outputjson", captured["cmd"])
