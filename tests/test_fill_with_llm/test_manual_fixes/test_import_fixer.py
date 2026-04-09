@@ -5,8 +5,8 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_added.transformer._class_finder import find_name_in_supertype_stubs
-from stub_added.transformer.file_fix import ImportFixer
+from stub_adder.transformer._class_finder import find_name_in_supertype_stubs
+from stub_adder.transformer.file_fix import ImportFixer
 
 
 def _mypy_errors(path: Path) -> list[str]:

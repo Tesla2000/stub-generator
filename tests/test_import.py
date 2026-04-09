@@ -4,6 +4,6 @@ from unittest import TestCase
 class TestImport(TestCase):
     @staticmethod
     def test_import():
-        import stub_added  # ignore
+        import stub_adder  # ignore
 
-        _ = stub_added
+        _ = stub_adder

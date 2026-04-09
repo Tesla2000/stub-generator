@@ -6,8 +6,8 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_added.transformer._class_finder import find_class_module
-from stub_added.transformer.multifile_fixes._any_base_fixer import AnyBaseFixer
+from stub_adder.transformer._class_finder import find_class_module
+from stub_adder.transformer.multifile_fixes._any_base_fixer import AnyBaseFixer
 
 
 def _tree(src: str) -> ast.Module:

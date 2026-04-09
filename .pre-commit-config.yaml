@@ -14,7 +14,7 @@ repos:
           --retain-pre-import,
           'True',
           --application-directories,
-          "type_first_discriminator",
+          ".:stub_adder",
         ]
   - repo: https://github.com/PyCQA/autoflake
     rev: v2.3.3

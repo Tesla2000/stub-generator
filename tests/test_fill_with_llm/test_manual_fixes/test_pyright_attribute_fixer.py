@@ -3,8 +3,8 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_added.transformer.error_generator._pyright import Pyright
-from stub_added.transformer.file_fix.pyright_attribute_fixer import (
+from stub_adder.transformer.error_generator._pyright import Pyright
+from stub_adder.transformer.file_fix.pyright_attribute_fixer import (
     PyrightAttributeFixer,
 )
 
