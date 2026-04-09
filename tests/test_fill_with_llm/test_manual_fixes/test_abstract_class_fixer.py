@@ -1,7 +1,7 @@
 import textwrap
 from unittest import TestCase
 
-from stub_added.transformer.file_fix.abstract_class_fixer import (
+from stub_adder.transformer.file_fix.abstract_class_fixer import (
     AbstractClassFixer,
 )
 

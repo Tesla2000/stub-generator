@@ -5,7 +5,7 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_added.transformer.file_fix.callable_to_async_def import (
+from stub_adder.transformer.file_fix.callable_to_async_def import (
     CallableToAsyncDef,
 )
 

@@ -13,7 +13,7 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_added.transformer.file_fix.lsp_violation_fixer import (
+from stub_adder.transformer.file_fix.lsp_violation_fixer import (
     LspViolationFixer,
 )
 

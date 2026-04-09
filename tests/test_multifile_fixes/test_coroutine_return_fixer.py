@@ -4,7 +4,7 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_added.transformer.multifile_fixes._coroutine_return_fixer import (
+from stub_adder.transformer.multifile_fixes._coroutine_return_fixer import (
     CoroutineReturnFixer,
 )
 

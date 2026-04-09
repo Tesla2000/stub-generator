@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from stub_added.transformer.stub_postprocessor import postprocess_stub
+from stub_adder.transformer.stub_postprocessor import postprocess_stub
 
 
 class TestPostprocessStub(TestCase):

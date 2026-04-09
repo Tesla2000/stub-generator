@@ -5,8 +5,8 @@ from unittest import TestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from stub_added.transformer.error_generator import Pyright
-from stub_added.transformer.error_generator._pyright import PyrightConfig
+from stub_adder.transformer.error_generator import Pyright
+from stub_adder.transformer.error_generator._pyright import PyrightConfig
 
 
 def _make_pyright_output(diagnostics: list[dict]) -> str:

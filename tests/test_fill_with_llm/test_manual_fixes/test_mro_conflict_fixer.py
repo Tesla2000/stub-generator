@@ -5,7 +5,7 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_added.transformer.file_fix.mro_conflict_fixer import MroConflictFixer
+from stub_adder.transformer.file_fix.mro_conflict_fixer import MroConflictFixer
 
 
 def _mypy_errors(path: Path, mypypath: str = "") -> list[str]:
