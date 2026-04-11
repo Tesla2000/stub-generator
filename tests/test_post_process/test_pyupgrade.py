@@ -2,7 +2,7 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-from stub_adder.transformer.post_process._pyupgrade import Pyupgrade
+from stub_adder.transformer.process._pyupgrade import Pyupgrade
 
 
 class TestPyupgrade(TestCase):
