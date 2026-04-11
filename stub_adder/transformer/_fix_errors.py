@@ -17,10 +17,16 @@ from stub_adder.transformer.error_generator import Mypy
 from stub_adder.transformer.error_generator import Pyright
 from stub_adder.transformer.file_fix import AbstractClassFixer
 from stub_adder.transformer.file_fix import CallableToAsyncDef
+from stub_adder.transformer.file_fix import DocstringFixer
+from stub_adder.transformer.file_fix import EnterReturnSelfFixer
 from stub_adder.transformer.file_fix import ImportFixer
+from stub_adder.transformer.file_fix import IntFloatFixer
+from stub_adder.transformer.file_fix import LongLiteralFixer
 from stub_adder.transformer.file_fix import LspViolationFixer
 from stub_adder.transformer.file_fix import MroConflictFixer
+from stub_adder.transformer.file_fix import MutableDefaultFixer
 from stub_adder.transformer.file_fix import PyrightAttributeFixer
+from stub_adder.transformer.file_fix import TypeAliasFixer
 from stub_adder.transformer.multifile_fixes import AnyBaseFixer
 from stub_adder.transformer.multifile_fixes import CoroutineReturnFixer
 from stub_adder.transformer.multifile_fixes import LlmFixer
@@ -40,6 +46,12 @@ AnyFix = Annotated[
         AnyBaseFixer,
         CoroutineReturnFixer,
         LlmFixer,
+        DocstringFixer,
+        TypeAliasFixer,
+        MutableDefaultFixer,
+        LongLiteralFixer,
+        EnterReturnSelfFixer,
+        IntFloatFixer,
     ],
     Field(discriminator="type"),
 ]
@@ -53,6 +65,12 @@ class FixErrors(BaseModel):
     )
     fixes: tuple[AnyFix, ...] = Field(
         default_factory=lambda: (
+            DocstringFixer(),
+            TypeAliasFixer(),
+            MutableDefaultFixer(),
+            LongLiteralFixer(),
+            EnterReturnSelfFixer(),
+            IntFloatFixer(),
             PyrightAttributeFixer(),
             AnyBaseFixer(),
             LspViolationFixer(),
