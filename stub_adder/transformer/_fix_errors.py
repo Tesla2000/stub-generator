@@ -24,9 +24,9 @@ from stub_adder.transformer.file_fix import PyrightAttributeFixer
 from stub_adder.transformer.multifile_fixes import AnyBaseFixer
 from stub_adder.transformer.multifile_fixes import CoroutineReturnFixer
 from stub_adder.transformer.multifile_fixes import LlmFixer
-from stub_adder.transformer.post_process import AnyPostProcess
-from stub_adder.transformer.post_process import Black
-from stub_adder.transformer.post_process import Pyupgrade
+from stub_adder.transformer.process import AnyProcess
+from stub_adder.transformer.process import Black
+from stub_adder.transformer.process import Pyupgrade
 from stub_adder.transformer.transformer_type import TransformerType
 
 AnyFix = Annotated[
@@ -64,7 +64,13 @@ class FixErrors(BaseModel):
             LlmFixer(),
         )
     )
-    post_process: tuple[AnyPostProcess, ...] = Field(
+    pre_process: tuple[AnyProcess, ...] = Field(
+        default_factory=lambda: (
+            Pyupgrade(),
+            Black(),
+        )
+    )
+    post_process: tuple[AnyProcess, ...] = Field(
         default_factory=lambda: (
             Pyupgrade(),
             Black(),
@@ -74,22 +80,13 @@ class FixErrors(BaseModel):
     def transform(
         self, stub_tuples: _StubTuples, stubs_dir: Path
     ) -> _StubTuples:
-        self._fix_stubs(stub_tuples, stubs_dir)
-        self._run_post_process(stub_tuples)
-        return stub_tuples
-
-    def _run_post_process(self, stub_tuples: _StubTuples) -> None:
-        pyi_paths = [s.pyi_path for s in stub_tuples]
-        for processor in self.post_process:
-            processor.process(pyi_paths)
-
-    def _fix_stubs(self, stub_tuples: _StubTuples, stubs_dir: Path) -> None:
         completed: dict[Path, str] = {}
         deps = pyi_to_deps(stub_tuples)
         for layer in tqdm(topo_layers(stub_tuples)):
             self._fix_mypy_errors(layer, deps, completed, stubs_dir)
             for s in layer:
                 completed[s.pyi_path] = s.pyi_path.read_text()
+        return stub_tuples
 
     def _generate_errors(
         self, pyi_paths: list[Path], stubs_dir: Path
@@ -113,6 +110,8 @@ class FixErrors(BaseModel):
         stub_by_path = {s.pyi_path: s for s in layer}
         attempts: dict[str, int] = {fix.type: 0 for fix in self.fixes}
 
+        for processor in self.post_process:
+            processor.process(pyi_paths)
         while True:
             errors_by_file = self._generate_errors(pyi_paths, stubs_dir)
             if not errors_by_file:
@@ -143,3 +142,5 @@ class FixErrors(BaseModel):
                 layer_deps,
                 stubs_dir,
             )
+            for processor in self.post_process:
+                processor.process(pyi_paths)
