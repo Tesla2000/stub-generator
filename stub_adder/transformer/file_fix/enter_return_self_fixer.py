@@ -6,6 +6,7 @@ from typing import ClassVar
 from typing import Literal
 
 from stub_adder.transformer.file_fix._base import ManualFix
+from stub_adder.transformer.file_fix._base import SourceSpan
 
 _TYPING_EXTENSIONS_SELF = "from typing_extensions import Self"
 _CLASS_RE: re.Pattern[str] = re.compile(
@@ -59,10 +60,7 @@ class EnterReturnSelfFixer(ManualFix):
         tree = ast.parse(contents)
         lines = contents.splitlines(keepends=True)
 
-        spans: list[tuple[int, int, int]] = (
-            []
-        )  # (lineno 0-based, col_start, col_end)
-
+        spans: list[SourceSpan] = []
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef) or node.name not in affected:
                 continue
@@ -75,14 +73,14 @@ class EnterReturnSelfFixer(ManualFix):
                     ret = item.returns
                     assert ret.end_col_offset is not None
                     spans.append(
-                        (ret.lineno - 1, ret.col_offset, ret.end_col_offset)
+                        SourceSpan(
+                            ret.lineno - 1, ret.col_offset, ret.end_col_offset
+                        )
                     )
 
-        for lineno, start, end in sorted(
-            spans, key=lambda t: (t[0], t[1]), reverse=True
-        ):
-            line = lines[lineno]
-            lines[lineno] = line[:start] + "Self" + line[end:]
+        for span in sorted(spans, reverse=True):
+            line = lines[span.lineno]
+            lines[span.lineno] = line[: span.start] + "Self" + line[span.end :]
 
         result = "".join(lines)
 

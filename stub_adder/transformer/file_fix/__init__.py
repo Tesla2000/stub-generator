@@ -28,6 +28,9 @@ from stub_adder.transformer.file_fix.pyright_attribute_fixer import (
     PyrightAttributeFixer,
 )
 from stub_adder.transformer.file_fix.type_alias_fixer import TypeAliasFixer
+from stub_adder.transformer.file_fix.type_checking_fixer import (
+    TypeCheckingFixer,
+)
 
 AnyManualFix = Annotated[
     Union[
@@ -40,6 +43,7 @@ AnyManualFix = Annotated[
         MutableDefaultFixer,
         DocstringFixer,
         TypeAliasFixer,
+        TypeCheckingFixer,
         LongLiteralFixer,
         EnterReturnSelfFixer,
         IntFloatFixer,
@@ -62,4 +66,5 @@ __all__ = [
     "MutableDefaultFixer",
     "PyrightAttributeFixer",
     "TypeAliasFixer",
+    "TypeCheckingFixer",
 ]

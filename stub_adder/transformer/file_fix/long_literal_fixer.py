@@ -6,6 +6,7 @@ from typing import ClassVar
 from typing import Literal
 
 from stub_adder.transformer.file_fix._base import ManualFix
+from stub_adder.transformer.file_fix._base import SourceSpan
 
 _MAX_LEN = 50
 
@@ -32,9 +33,7 @@ class LongLiteralFixer(ManualFix):
         tree = ast.parse(contents)
         lines = contents.splitlines(keepends=True)
 
-        spans: list[tuple[int, int, int]] = (
-            []
-        )  # (lineno 0-based, col_start, col_end)
+        spans: list[SourceSpan] = []
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Constant)
@@ -43,14 +42,14 @@ class LongLiteralFixer(ManualFix):
             ):
                 assert node.end_col_offset is not None
                 spans.append(
-                    (node.lineno - 1, node.col_offset, node.end_col_offset)
+                    SourceSpan(
+                        node.lineno - 1, node.col_offset, node.end_col_offset
+                    )
                 )
 
         # Replace right-to-left so column offsets stay valid.
-        for lineno, start, end in sorted(
-            spans, key=lambda t: (t[0], t[1]), reverse=True
-        ):
-            line = lines[lineno]
-            lines[lineno] = line[:start] + "..." + line[end:]
+        for span in sorted(spans, reverse=True):
+            line = lines[span.lineno]
+            lines[span.lineno] = line[: span.start] + "..." + line[span.end :]
 
         return "".join(lines)

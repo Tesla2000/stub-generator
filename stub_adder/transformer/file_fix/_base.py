@@ -3,11 +3,28 @@ from abc import abstractmethod
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal
+from typing import NamedTuple
 
 from pydantic import BaseModel
 from pydantic import PositiveInt
 
 from stub_adder._stub_tuple import _StubTuple
+
+
+class SourceSpan(NamedTuple):
+    """A replacement span within a single source line (all 0-based)."""
+
+    lineno: int
+    start: int
+    end: int
+
+
+class DocstringRange(NamedTuple):
+    """Line range of a docstring node (1-based, inclusive)."""
+
+    start: int
+    end: int
+    only: bool  # True when the docstring is the sole statement in its body
 
 
 class ManualFix(BaseModel, ABC):
