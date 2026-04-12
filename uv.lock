@@ -1702,7 +1702,6 @@ requires-dist = [
     { name = "pyupgrade", specifier = ">=3.21.2" },
     { name = "ruff", specifier = ">=0.15.10" },
     { name = "tomli", specifier = ">=2.4.1" },
-    { name = "tomlkit" },
     { name = "tomlkit", specifier = ">=0.14.0" },
     { name = "tqdm", specifier = ">=4.67.3" },
     { name = "ts-utils", editable = "typeshed/lib" },

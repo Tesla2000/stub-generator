@@ -73,7 +73,7 @@ class LlmFixer(MultiFileFix):
             f"Original file:\n{s.py_path.read_text()}"
             f"\n\nStub path:{s.pyi_path}"
             f"\nStub contents:\n{s.pyi_path.read_text()}"
-            f"\n\nMypy errors:\n{chr(10).join(errors_by_file[s.pyi_path])}"
+            f"\n\nErrors:\n{chr(10).join(errors_by_file[s.pyi_path.absolute()])}"
             for s in affected_stubs
         ]
         stub_outputs = self._invoke_llm(

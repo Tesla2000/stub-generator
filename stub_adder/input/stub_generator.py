@@ -46,17 +46,18 @@ class StubGenerator(BaseModel):
         )
 
         self.logger.debug("Stub generation complete!")
-
-        for path in package_paths:
-            for original_path in path.rglob("*.py"):
-                yield _StubTuple(
-                    py_path=original_path,
-                    pyi_path=output_path.joinpath(
-                        original_path.relative_to(self.clone_path).with_suffix(
-                            ".pyi"
-                        )
-                    ),
-                )
+        yield from (
+            _StubTuple(
+                py_path=original_path.absolute(),
+                pyi_path=output_path.joinpath(
+                    original_path.relative_to(self.clone_path).with_suffix(
+                        ".pyi"
+                    )
+                ).absolute(),
+            )
+            for path in package_paths
+            for original_path in path.rglob("*.py")
+        )
 
     @staticmethod
     def _extract_package_name(repo_path: Path) -> Path:

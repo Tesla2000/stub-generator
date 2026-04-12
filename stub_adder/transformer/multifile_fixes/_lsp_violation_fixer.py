@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import ClassVar
 from typing import Literal
 
-from stub_adder.transformer.file_fix._base import ManualFix
+from stub_adder._stub_tuple import _StubTuple
 from stub_adder.transformer.file_fix.import_fixer import ImportFixer
+from stub_adder.transformer.multifile_fixes._base import MultiFileFix
 
 
 class _ReturnTypeFixer(ast.NodeTransformer):
@@ -151,7 +152,7 @@ class _FieldFixer(ast.NodeTransformer):
     visit_AsyncFunctionDef = _fix  # type: ignore[assignment]
 
 
-class LspViolationFixer(ManualFix):
+class LspViolationFixer(MultiFileFix):
     type: Literal["lsp"] = "lsp"
     # Format 1: per-argument errors
     _ARG_RE: ClassVar[re.Pattern[str]] = re.compile(
@@ -311,6 +312,10 @@ class LspViolationFixer(ManualFix):
             i += 1
         return result
 
+    _SUPERTYPE_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r'(?:incompatible with supertype|in supertype) "(?P<supertype>[\w.]+)"'
+    )
+
     def is_applicable(self, errors: Iterable[str]) -> bool:
         return any(
             self._ARG_RE.search(e)
@@ -319,14 +324,94 @@ class LspViolationFixer(ManualFix):
             for e in errors
         )
 
+    def _extract_lsp_methods(self, errors: list[str]) -> set[str]:
+        methods: set[str] = set()
+        for e in errors:
+            for pattern in (self._SIG_RE, self._ARG_RE, self._RETURN_RE):
+                m = pattern.search(e)
+                if m:
+                    methods.add(m.group("method"))
+        return methods
+
+    @staticmethod
+    def _find_class_for_method(tree: ast.Module, method: str) -> str | None:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                for item in node.body:
+                    if (
+                        isinstance(
+                            item, (ast.FunctionDef, ast.AsyncFunctionDef)
+                        )
+                        and item.name == method
+                    ):
+                        return node.name
+        return None
+
+    @staticmethod
+    def _append_allowlist(entries: list[str], stubs_dir: Path) -> None:
+        allowlist_path = stubs_dir / "@tests" / "stubtest_allowlist.txt"
+        allowlist_path.parent.mkdir(parents=True, exist_ok=True)
+        existing_text = (
+            allowlist_path.read_text() if allowlist_path.exists() else ""
+        )
+        existing_set = set(existing_text.splitlines())
+        new_entries = [e for e in entries if e not in existing_set]
+        if not new_entries:
+            return
+        separator = (
+            "" if existing_text.endswith("\n") or not existing_text else "\n"
+        )
+        allowlist_path.write_text(
+            existing_text + separator + "\n".join(new_entries) + "\n"
+        )
+
     def __call__(
+        self,
+        affected_stubs: list[_StubTuple],
+        errors_by_file: dict[Path, list[str]],
+        completed: dict[Path, str],
+        layer_deps: dict[Path, set[Path]],
+        stubs_dir: Path,
+    ) -> None:
+        for pyi, errors in errors_by_file.items():
+            contents = pyi.read_text()
+            new_contents = self._fix_file(
+                contents=contents, errors=errors, stubs_dir=stubs_dir
+            )
+            if new_contents != contents:
+                pyi.write_text(new_contents)
+                continue
+            # Fix couldn't be applied — add affected methods to stubtest allowlist
+            methods = self._extract_lsp_methods(errors)
+            if not methods:
+                continue
+            try:
+                tree = ast.parse(contents)
+                rel = pyi.resolve().relative_to(stubs_dir.resolve())
+            except (SyntaxError, ValueError):
+                continue
+            parts = list(rel.with_suffix("").parts)
+            if parts and parts[-1] == "__init__":
+                parts.pop()
+            module_path = ".".join(parts)
+            entries = []
+            for method in sorted(methods):
+                class_name = self._find_class_for_method(tree, method)
+                qualified = (
+                    f"{module_path}.{class_name}.{method}"
+                    if class_name
+                    else f"{module_path}.{method}"
+                )
+                entries.append(qualified)
+            self._append_allowlist(entries, stubs_dir)
+
+    def _fix_file(
         self, contents: str, errors: list[str], stubs_dir: Path | None = None
     ) -> str:
         positional = self._parse_positional_fixes(errors)
         named = self._parse_signature_fixes(errors)
         returns = self._parse_return_fixes(errors)
         all_field_fixes = self._parse_field_fixes(errors)
-        # Exclude names already handled as method signatures
         fields = {k: v for k, v in all_field_fixes.items() if k not in named}
 
         if not positional and not named and not returns and not fields:
