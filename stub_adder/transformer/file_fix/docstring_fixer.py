@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import ClassVar
 from typing import Literal
 
+from stub_adder.transformer.file_fix._base import DocstringRange
 from stub_adder.transformer.file_fix._base import ManualFix
 
 
@@ -30,16 +31,20 @@ class DocstringFixer(ManualFix):
         tree = ast.parse(contents)
         lines = contents.splitlines(keepends=True)
 
-        # Collect line ranges of docstring nodes (1-based, inclusive).
-        ranges: list[tuple[int, int]] = []
-        bodies: list[list[ast.stmt]] = [tree.body]
+        # Collect DocstringRange for each docstring node.
+        # only=True means the docstring is the sole statement — replace with `...`.
+        ranges: list[DocstringRange] = []
+
+        body_infos: list[tuple[list[ast.stmt], bool]] = [
+            (tree.body, len(tree.body) == 1)
+        ]
         for node in ast.walk(tree):
             if isinstance(
                 node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
             ):
-                bodies.append(node.body)
+                body_infos.append((node.body, len(node.body) == 1))
 
-        for body in bodies:
+        for body, only in body_infos:
             if not body:
                 continue
             first = body[0]
@@ -49,10 +54,16 @@ class DocstringFixer(ManualFix):
                 and isinstance(first.value.value, str)
             ):
                 assert first.end_lineno is not None
-                ranges.append((first.lineno, first.end_lineno))
+                ranges.append(
+                    DocstringRange(first.lineno, first.end_lineno, only)
+                )
 
-        # Remove in reverse order so earlier line numbers stay valid.
-        for start, end in sorted(ranges, reverse=True):
-            del lines[start - 1 : end]
+        # Process in reverse order so earlier line numbers stay valid.
+        for r in sorted(ranges, reverse=True):
+            indent = re.match(r"^(\s*)", lines[r.start - 1]).group(1)  # type: ignore[union-attr]
+            if r.only:
+                lines[r.start - 1 : r.end] = [indent + "...\n"]
+            else:
+                del lines[r.start - 1 : r.end]
 
         return "".join(lines)

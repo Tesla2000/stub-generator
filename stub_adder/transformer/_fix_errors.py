@@ -13,8 +13,10 @@ from stub_adder.transformer._stub_tuples import _StubTuples
 from stub_adder.transformer._topo import pyi_to_deps
 from stub_adder.transformer._topo import topo_layers
 from stub_adder.transformer.error_generator import AnyGenerator
+from stub_adder.transformer.error_generator import Flake8
 from stub_adder.transformer.error_generator import Mypy
 from stub_adder.transformer.error_generator import Pyright
+from stub_adder.transformer.error_generator import Ruff
 from stub_adder.transformer.file_fix import AbstractClassFixer
 from stub_adder.transformer.file_fix import CallableToAsyncDef
 from stub_adder.transformer.file_fix import DocstringFixer
@@ -27,12 +29,14 @@ from stub_adder.transformer.file_fix import MroConflictFixer
 from stub_adder.transformer.file_fix import MutableDefaultFixer
 from stub_adder.transformer.file_fix import PyrightAttributeFixer
 from stub_adder.transformer.file_fix import TypeAliasFixer
+from stub_adder.transformer.file_fix import TypeCheckingFixer
 from stub_adder.transformer.multifile_fixes import AnyBaseFixer
 from stub_adder.transformer.multifile_fixes import CoroutineReturnFixer
 from stub_adder.transformer.multifile_fixes import LlmFixer
 from stub_adder.transformer.process import AnyProcess
 from stub_adder.transformer.process import Black
 from stub_adder.transformer.process import Pyupgrade
+from stub_adder.transformer.process import RuffIsort
 from stub_adder.transformer.transformer_type import TransformerType
 
 AnyFix = Annotated[
@@ -48,6 +52,7 @@ AnyFix = Annotated[
         LlmFixer,
         DocstringFixer,
         TypeAliasFixer,
+        TypeCheckingFixer,
         MutableDefaultFixer,
         LongLiteralFixer,
         EnterReturnSelfFixer,
@@ -62,9 +67,12 @@ class FixErrors(BaseModel):
     error_generators: tuple[AnyGenerator, ...] = (
         Mypy(),
         Pyright(),
+        Flake8(),
+        Ruff(),
     )
     fixes: tuple[AnyFix, ...] = Field(
         default_factory=lambda: (
+            TypeCheckingFixer(),
             DocstringFixer(),
             TypeAliasFixer(),
             MutableDefaultFixer(),
@@ -86,12 +94,14 @@ class FixErrors(BaseModel):
         default_factory=lambda: (
             Pyupgrade(),
             Black(),
+            RuffIsort(),
         )
     )
     post_process: tuple[AnyProcess, ...] = Field(
         default_factory=lambda: (
             Pyupgrade(),
             Black(),
+            RuffIsort(),
         )
     )
 

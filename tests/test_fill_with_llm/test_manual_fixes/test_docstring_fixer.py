@@ -80,5 +80,25 @@ class TestDocstringFixer(TestCase):
         self.assertNotIn("Class doc", result)
         self.assertIn("x: int", result)
 
+    def test_class_only_docstring_replaced_with_ellipsis(self):
+        src = f"class Foo:\n    {Q}Only thing here.{Q}\n"
+        result = self.fixer(src, self.errors)
+        self.assertNotIn("Only thing here", result)
+        self.assertIn("class Foo:", result)
+        self.assertIn("...", result)
+
+    def test_function_only_docstring_replaced_with_ellipsis(self):
+        src = f"def foo() -> None:\n    {Q}Does nothing.{Q}\n"
+        result = self.fixer(src, self.errors)
+        self.assertNotIn("Does nothing", result)
+        self.assertIn("def foo", result)
+        self.assertIn("...", result)
+
+    def test_only_docstring_preserves_indentation(self):
+        src = f"class Foo:\n    def bar(self) -> None:\n        {Q}doc{Q}\n"
+        result = self.fixer(src, self.errors)
+        self.assertNotIn("doc", result)
+        self.assertIn("        ...", result)
+
     def test_type_is_docstring(self):
         self.assertEqual(self.fixer.type, "docstring")

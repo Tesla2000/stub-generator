@@ -7,23 +7,35 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 
 
+class Flake8Config(BaseModel):
+    """flake8 configuration mirroring typeshed's .flake8 defaults."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
+
+    # Only run flake8-pyi (Y) rules — matches typeshed's "select = Y"
+    select: tuple[str, ...] = ("Y",)
+    # Matches typeshed's "extend-ignore = Y090,Y091"
+    extend_ignore: tuple[str, ...] = ("Y090", "Y091")
+
+
 class Flake8(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
 
     type: Literal["flake8"] = "flake8"
+    config: Flake8Config = Flake8Config()
 
-    @staticmethod
     def generate(
-        pyi_paths: list[Path], stubs_dir: Path
+        self, pyi_paths: list[Path], stubs_dir: Path
     ) -> dict[Path, list[str]]:
         """Run flake8 with flake8-pyi and return per-file error lines."""
         pyi_paths = [p.resolve() for p in pyi_paths]
+        cmd = [
+            "flake8",
+            f"--select={','.join(self.config.select)}",
+            f"--extend-ignore={','.join(self.config.extend_ignore)}",
+        ]
         result = subprocess.run(
-            [
-                "flake8",
-                "--extend-select=Y",
-            ]
-            + list(map(str, pyi_paths)),
+            cmd + list(map(str, pyi_paths)),
             capture_output=True,
             text=True,
         )
