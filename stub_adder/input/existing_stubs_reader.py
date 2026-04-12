@@ -28,4 +28,6 @@ class ExistingStubsReader(BaseModel):
             if not py_path.exists():
                 self.logger.debug(f"No source found for {pyi_path}, skipping")
                 continue
-            yield _StubTuple(py_path=py_path, pyi_path=pyi_path)
+            yield _StubTuple(
+                py_path=py_path.absolute(), pyi_path=pyi_path.absolute()
+            )

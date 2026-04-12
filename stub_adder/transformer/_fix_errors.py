@@ -13,23 +13,34 @@ from stub_adder.transformer._stub_tuples import _StubTuples
 from stub_adder.transformer._topo import pyi_to_deps
 from stub_adder.transformer._topo import topo_layers
 from stub_adder.transformer.error_generator import AnyGenerator
+from stub_adder.transformer.error_generator import Flake8
+from stub_adder.transformer.error_generator import Mypy
+from stub_adder.transformer.error_generator import Pyright
+from stub_adder.transformer.error_generator import Ruff
 from stub_adder.transformer.error_generator import Stubtest
 from stub_adder.transformer.file_fix import AbstractClassFixer
+from stub_adder.transformer.file_fix import AsyncDefStubFixer
 from stub_adder.transformer.file_fix import CallableToAsyncDef
+from stub_adder.transformer.file_fix import ClassmethodFixer
+from stub_adder.transformer.file_fix import DefaultValueFixer
 from stub_adder.transformer.file_fix import DocstringFixer
 from stub_adder.transformer.file_fix import EnterReturnSelfFixer
 from stub_adder.transformer.file_fix import ImportFixer
 from stub_adder.transformer.file_fix import IntFloatFixer
 from stub_adder.transformer.file_fix import LongLiteralFixer
-from stub_adder.transformer.file_fix import LspViolationFixer
 from stub_adder.transformer.file_fix import MroConflictFixer
 from stub_adder.transformer.file_fix import MutableDefaultFixer
+from stub_adder.transformer.file_fix import NotPresentAtRuntimeFixer
 from stub_adder.transformer.file_fix import PyrightAttributeFixer
+from stub_adder.transformer.file_fix import RemoveDefaultFixer
+from stub_adder.transformer.file_fix import RemoveExtraParamFixer
 from stub_adder.transformer.file_fix import TypeAliasFixer
 from stub_adder.transformer.file_fix import TypeCheckingFixer
 from stub_adder.transformer.multifile_fixes import AnyBaseFixer
 from stub_adder.transformer.multifile_fixes import CoroutineReturnFixer
 from stub_adder.transformer.multifile_fixes import LlmFixer
+from stub_adder.transformer.multifile_fixes import LspViolationFixer
+from stub_adder.transformer.multifile_fixes import MetadataDependencyFixer
 from stub_adder.transformer.process import AnyProcess
 from stub_adder.transformer.process import Black
 from stub_adder.transformer.process import Pyupgrade
@@ -54,6 +65,13 @@ AnyFix = Annotated[
         LongLiteralFixer,
         EnterReturnSelfFixer,
         IntFloatFixer,
+        MetadataDependencyFixer,
+        AsyncDefStubFixer,
+        ClassmethodFixer,
+        DefaultValueFixer,
+        NotPresentAtRuntimeFixer,
+        RemoveDefaultFixer,
+        RemoveExtraParamFixer,
     ],
     Field(discriminator="type"),
 ]
@@ -62,14 +80,15 @@ AnyFix = Annotated[
 class FixErrors(BaseModel):
     type: Literal[TransformerType.FIX_MYPY] = TransformerType.FIX_MYPY
     error_generators: tuple[AnyGenerator, ...] = (
-        # Mypy(),
-        # Pyright(),
-        # Flake8(),
-        # Ruff(),
+        Mypy(),
+        Pyright(),
+        Flake8(),
+        Ruff(),
         Stubtest(),
     )
     fixes: tuple[AnyFix, ...] = Field(
         default_factory=lambda: (
+            MetadataDependencyFixer(),
             TypeCheckingFixer(),
             DocstringFixer(),
             TypeAliasFixer(),
@@ -84,6 +103,12 @@ class FixErrors(BaseModel):
             MroConflictFixer(),
             CallableToAsyncDef(),
             AbstractClassFixer(),
+            AsyncDefStubFixer(),
+            ClassmethodFixer(),
+            NotPresentAtRuntimeFixer(),
+            RemoveExtraParamFixer(),
+            RemoveDefaultFixer(),
+            DefaultValueFixer(),
             CoroutineReturnFixer(),
             LlmFixer(),
         )
@@ -122,7 +147,7 @@ class FixErrors(BaseModel):
             for path, errors in generator.generate(
                 pyi_paths, stubs_dir
             ).items():
-                errors_by_file[path].extend(errors)
+                errors_by_file[path.absolute()].extend(errors)
         return errors_by_file
 
     def _fix_mypy_errors(
@@ -133,21 +158,26 @@ class FixErrors(BaseModel):
         stubs_dir: Path,
     ) -> None:
         pyi_paths = [s.pyi_path for s in layer]
-        stub_by_path = {s.pyi_path: s for s in layer}
+        stub_by_path = {s.pyi_path.absolute(): s for s in layer}
         attempts: dict[str, int] = {fix.type: 0 for fix in self.fixes}
 
         for processor in self.post_process:
             processor.process(pyi_paths)
+        prev_all_errors: list[str] = []
         while True:
-            errors_by_file = self._generate_errors(pyi_paths, stubs_dir)
-            if not errors_by_file:
+            file_errors = self._generate_errors(pyi_paths, stubs_dir)
+            if not file_errors:
                 return
 
-            all_errors = [
-                e for errors in errors_by_file.values() for e in errors
-            ]
+            all_errors = [e for errors in file_errors.values() for e in errors]
+            if sorted(all_errors) == sorted(prev_all_errors):
+                raise ValueError(
+                    f"Errors unchanged after applying fix.\n{file_errors=}"
+                )
+            prev_all_errors = all_errors
+
             affected_stubs = list(
-                filter(None, map(stub_by_path.get, errors_by_file))
+                filter(None, map(stub_by_path.get, file_errors))
             )
 
             fix = next(
@@ -158,12 +188,12 @@ class FixErrors(BaseModel):
                 raise ValueError(f"No fix applicable for {all_errors=}")
             if attempts[fix.type] >= fix.max_attempts:
                 raise ValueError(
-                    f"Fix {fix.type!r} exhausted {fix.max_attempts} attempts.\n{errors_by_file=}"
+                    f"Fix {fix.type!r} exhausted {fix.max_attempts} attempts.\n{file_errors=}"
                 )
             attempts[fix.type] += 1
             fix.apply(
                 affected_stubs,
-                errors_by_file,
+                file_errors,
                 completed,
                 layer_deps,
                 stubs_dir,
