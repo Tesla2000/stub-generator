@@ -88,8 +88,7 @@ class LlmFixer(MultiFileFix):
             affected_stubs,
         )
         for output in stub_outputs:
-            if output.stub_path in errors_by_file:
-                output.stub_path.write_text(output.stub_contents)
+            output.stub_path.write_text(output.stub_contents)
 
     def _invoke_llm(
         self,
