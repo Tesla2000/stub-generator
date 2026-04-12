@@ -13,10 +13,7 @@ from stub_adder.transformer._stub_tuples import _StubTuples
 from stub_adder.transformer._topo import pyi_to_deps
 from stub_adder.transformer._topo import topo_layers
 from stub_adder.transformer.error_generator import AnyGenerator
-from stub_adder.transformer.error_generator import Flake8
-from stub_adder.transformer.error_generator import Mypy
-from stub_adder.transformer.error_generator import Pyright
-from stub_adder.transformer.error_generator import Ruff
+from stub_adder.transformer.error_generator import Stubtest
 from stub_adder.transformer.file_fix import AbstractClassFixer
 from stub_adder.transformer.file_fix import CallableToAsyncDef
 from stub_adder.transformer.file_fix import DocstringFixer
@@ -65,10 +62,11 @@ AnyFix = Annotated[
 class FixErrors(BaseModel):
     type: Literal[TransformerType.FIX_MYPY] = TransformerType.FIX_MYPY
     error_generators: tuple[AnyGenerator, ...] = (
-        Mypy(),
-        Pyright(),
-        Flake8(),
-        Ruff(),
+        # Mypy(),
+        # Pyright(),
+        # Flake8(),
+        # Ruff(),
+        Stubtest(),
     )
     fixes: tuple[AnyFix, ...] = Field(
         default_factory=lambda: (
