@@ -14,6 +14,7 @@ from stub_adder.transformer._topo import pyi_to_deps
 from stub_adder.transformer._topo import topo_layers
 from stub_adder.transformer.error_generator import AnyGenerator
 from stub_adder.transformer.error_generator import Flake8
+from stub_adder.transformer.error_generator import Incomplete
 from stub_adder.transformer.error_generator import Mypy
 from stub_adder.transformer.error_generator import Pyright
 from stub_adder.transformer.error_generator import Ruff
@@ -45,6 +46,8 @@ from stub_adder.transformer.process import AnyProcess
 from stub_adder.transformer.process import Black
 from stub_adder.transformer.process import Pyupgrade
 from stub_adder.transformer.process import RuffIsort
+from stub_adder.transformer.process import StringAnnotationUnquoter
+from stub_adder.transformer.process import UnusedImportRemover
 from stub_adder.transformer.transformer_type import TransformerType
 
 AnyFix = Annotated[
@@ -85,6 +88,7 @@ class FixErrors(BaseModel):
         Flake8(),
         Ruff(),
         Stubtest(),
+        Incomplete(),
     )
     fixes: tuple[AnyFix, ...] = Field(
         default_factory=lambda: (
@@ -113,15 +117,10 @@ class FixErrors(BaseModel):
             LlmFixer(),
         )
     )
-    pre_process: tuple[AnyProcess, ...] = Field(
+    process: tuple[AnyProcess, ...] = Field(
         default_factory=lambda: (
-            Pyupgrade(),
-            Black(),
-            RuffIsort(),
-        )
-    )
-    post_process: tuple[AnyProcess, ...] = Field(
-        default_factory=lambda: (
+            UnusedImportRemover(),
+            StringAnnotationUnquoter(),
             Pyupgrade(),
             Black(),
             RuffIsort(),
@@ -161,7 +160,7 @@ class FixErrors(BaseModel):
         stub_by_path = {s.pyi_path.absolute(): s for s in layer}
         attempts: dict[str, int] = {fix.type: 0 for fix in self.fixes}
 
-        for processor in self.post_process:
+        for processor in self.process:
             processor.process(pyi_paths)
         prev_all_errors: list[str] = []
         while True:
@@ -198,5 +197,5 @@ class FixErrors(BaseModel):
                 layer_deps,
                 stubs_dir,
             )
-            for processor in self.post_process:
+            for processor in self.process:
                 processor.process(pyi_paths)

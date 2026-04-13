@@ -92,10 +92,11 @@ class ForkAndPR(BaseModel):
             self.logger.debug(f"Created branch {self.branch_name}")
 
             for stub_tuple in stub_tuples:
-                relative = stub_tuple.pyi_path.relative_to(stubs_root)
+                pyi_path = stub_tuple.pyi_path.absolute()
+                relative = pyi_path.relative_to(stubs_root.absolute())
                 target = Path(tmp_dir) / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
-                copy2(stub_tuple.pyi_path, target)
+                copy2(pyi_path, target)
                 self._git(
                     tmp_dir,
                     "add",

@@ -6,6 +6,8 @@ from typing import Literal
 from pydantic import BaseModel
 from pydantic import ConfigDict
 
+from stub_adder.transformer.error_generator._base import ErrorGeneratorBase
+
 
 class Flake8Config(BaseModel):
     """flake8 configuration mirroring typeshed's .flake8 defaults."""
@@ -18,9 +20,7 @@ class Flake8Config(BaseModel):
     extend_ignore: tuple[str, ...] = ("Y090", "Y091")
 
 
-class Flake8(BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
-
+class Flake8(ErrorGeneratorBase):
     type: Literal["flake8"] = "flake8"
     config: Flake8Config = Flake8Config()
 

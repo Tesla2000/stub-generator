@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic.alias_generators import to_camel
 
+from stub_adder.transformer.error_generator._base import ErrorGeneratorBase
+
 DiagnosticRule = Literal["error", "warning", "information", "none"]
 
 
@@ -45,9 +47,7 @@ class PyrightConfig(BaseModel):
     report_deprecated: DiagnosticRule = "none"
 
 
-class Pyright(BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
-
+class Pyright(ErrorGeneratorBase):
     type: Literal["pyright"] = "pyright"
     config: PyrightConfig = PyrightConfig()
 

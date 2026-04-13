@@ -5,14 +5,12 @@ from typing import Literal
 from stub_adder.transformer.process._base import ProcessBase
 
 
-class Black(ProcessBase):
-    type: Literal["black"] = "black"
-    target_version: str = "py310"
+class UnusedImportRemover(ProcessBase):
+    type: Literal["unused_import_remover"] = "unused_import_remover"
 
     def process(self, pyi_paths: list[Path]) -> None:
-        """Run black --quiet on the given stub files in-place."""
         subprocess.run(
-            ("black", "--quiet", "--target-version", self.target_version)
+            ("ruff", "check", "--fix", "--select", "F401")
             + tuple(map(str, pyi_paths)),
-            check=True,
+            capture_output=True,
         )
