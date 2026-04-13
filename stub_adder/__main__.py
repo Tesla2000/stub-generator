@@ -1,5 +1,4 @@
 import os
-import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -20,9 +19,7 @@ class Main(BaseSettings):
         cli_kebab_case=True,
     )
 
-    output_path: Path = Field(
-        default_factory=lambda: Path(tempfile.TemporaryDirectory().name)
-    )
+    output_path: Path
 
     input: AnyInput
     transformer: FixErrors = Field(default_factory=FixErrors)

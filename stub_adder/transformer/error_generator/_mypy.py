@@ -1,21 +1,16 @@
 import os
 import subprocess
 from pathlib import Path
-from typing import ClassVar
 from typing import Literal
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
+from stub_adder.transformer.error_generator._base import ErrorGeneratorBase
 
 
-class Mypy(BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
-
+class Mypy(ErrorGeneratorBase):
     type: Literal["mypy"] = "mypy"
 
-    @staticmethod
     def generate(
-        pyi_paths: list[Path], stubs_dir: Path
+        self, pyi_paths: list[Path], stubs_dir: Path
     ) -> dict[Path, list[str]]:
         """Run mypy --strict and return per-file error lines for files with errors."""
         env = os.environ.copy()

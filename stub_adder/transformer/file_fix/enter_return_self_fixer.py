@@ -9,17 +9,19 @@ from stub_adder.transformer.file_fix._base import ManualFix
 from stub_adder.transformer.file_fix._base import SourceSpan
 
 _TYPING_EXTENSIONS_SELF = "from typing_extensions import Self"
+# Matches both:
+#   "__enter__" methods in classes like "ClassName"
+#   in "ClassName.__new__" (or .__aenter__, .__aexit__, etc.)
 _CLASS_RE: re.Pattern[str] = re.compile(
-    r'"__enter__" methods in classes like "(?P<cls>\w+)"'
+    r'(?:in classes like|in) "(?P<cls>\w+)(?:\.\w+)?"'
 )
+_AFFECTED_METHODS = {"__enter__", "__aenter__", "__new__"}
 
 
 class EnterReturnSelfFixer(ManualFix):
-    """Fix flake8-pyi Y034: ``__enter__`` should return ``Self`` not the class name.
+    """Fix flake8-pyi Y034: dunder methods should return ``Self``.
 
-    Rewrites ``def __enter__(self) -> ClassName: ...`` to
-    ``def __enter__(self) -> Self: ...`` and adds
-    ``from typing_extensions import Self`` if not already present.
+    Handles ``__enter__``, ``__aenter__``, and ``__new__``.
     """
 
     type: Literal["enter_return_self"] = "enter_return_self"
@@ -30,12 +32,11 @@ class EnterReturnSelfFixer(ManualFix):
 
     @staticmethod
     def _affected_classes(errors: list[str]) -> set[str]:
-        classes: set[str] = set()
-        for error in errors:
-            m = _CLASS_RE.search(error)
-            if m:
-                classes.add(m.group("cls"))
-        return classes
+        return {
+            m.group("cls")
+            for error in errors
+            if (m := _CLASS_RE.search(error))
+        }
 
     @staticmethod
     def _has_self_import(tree: ast.Module) -> bool:
@@ -67,7 +68,7 @@ class EnterReturnSelfFixer(ManualFix):
             for item in ast.walk(node):
                 if (
                     isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    and item.name == "__enter__"
+                    and item.name in _AFFECTED_METHODS
                     and item.returns is not None
                 ):
                     ret = item.returns

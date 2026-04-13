@@ -1,15 +1,11 @@
 import subprocess
 from pathlib import Path
-from typing import ClassVar
 from typing import Literal
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
+from stub_adder.transformer.process._base import ProcessBase
 
 
-class RuffIsort(BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
-
+class RuffIsort(ProcessBase):
     type: Literal["ruff_isort"] = "ruff_isort"
 
     def process(self, pyi_paths: list[Path]) -> None:

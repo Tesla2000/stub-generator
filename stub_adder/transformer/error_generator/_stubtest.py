@@ -7,17 +7,13 @@ from pathlib import Path
 from typing import ClassVar
 from typing import Literal
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
-
+from stub_adder.transformer.error_generator._base import ErrorGeneratorBase
 from typeshed.tests.stubtest_third_party import run_stubtest
 
 _ANSI_RE: re.Pattern[str] = re.compile(r"\x1b\[[0-9;]*m")
 
 
-class Stubtest(BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
-
+class Stubtest(ErrorGeneratorBase):
     type: Literal["stubtest"] = "stubtest"
     ci_platforms_only: bool = True
     _ERROR_RE: ClassVar[re.Pattern[str]] = re.compile(
