@@ -5,9 +5,22 @@ from typing import ClassVar
 from typing import Literal
 
 import tomlkit
+from ts_utils.metadata import get_pypi_name_to_typeshed_name_mapping
+from ts_utils.metadata import get_recursive_requirements
+from ts_utils.metadata import read_dependencies
+from ts_utils.metadata import read_metadata
+from ts_utils.metadata import read_stubtest_settings
 
 from stub_adder._stub_tuple import _StubTuple
 from stub_adder.transformer.multifile_fixes._base import MultiFileFix
+
+
+def _clear_metadata_cache() -> None:
+    read_metadata.cache_clear()
+    read_stubtest_settings.cache_clear()
+    read_dependencies.cache_clear()
+    get_pypi_name_to_typeshed_name_mapping.cache_clear()
+    get_recursive_requirements.cache_clear()
 
 
 class MetadataDependencyFixer(MultiFileFix):
@@ -86,3 +99,4 @@ class MetadataDependencyFixer(MultiFileFix):
             doc["dependencies"] = existing_deps
 
         metadata_path.write_text(tomlkit.dumps(doc))
+        _clear_metadata_cache()
