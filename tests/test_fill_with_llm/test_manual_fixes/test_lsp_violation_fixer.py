@@ -4,7 +4,7 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_adder.transformer.file_fix import (
+from stub_adder.transformer.multifile_fixes import (
     LspViolationFixer,
 )
 
