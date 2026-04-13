@@ -108,10 +108,8 @@ class TestStubtestGenerate(TestCase):
         self.init_pyi = self.pkg_dir / "__init__.pyi"
         self.init_pyi.write_text("def foo() -> None: ...\n")
         self.stubtest = Stubtest()
-        _stubtest._VENV_CACHE.clear()
 
     def tearDown(self) -> None:
-        _stubtest._VENV_CACHE.clear()
         self._tmp.cleanup()
 
     def test_type_is_stubtest(self):
