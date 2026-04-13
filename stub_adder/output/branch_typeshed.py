@@ -3,6 +3,7 @@ from collections.abc import Iterable
 from contextlib import suppress
 from pathlib import Path
 from shutil import copy2
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -17,6 +18,7 @@ class BranchTypeshed(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    type: Literal["branch_typeshed"] = "branch_typeshed"
     typeshed_path: Path = Field(
         Path("typeshed"),
         description="Path to the typeshed submodule directory",

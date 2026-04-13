@@ -25,6 +25,9 @@ class ImportFixer(ManualFix):
     _SUPERTYPE_RE: ClassVar[re.Pattern[str]] = re.compile(
         r'(?:incompatible with supertype|in supertype) "(?P<supertype>[^"]+)"'
     )
+    _UNRESOLVED_IMPORT_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r":(?P<line>\d+): error: Import \"[^\"]+\" could not be resolved"
+    )
 
     @staticmethod
     @cache
