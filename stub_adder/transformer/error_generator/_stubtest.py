@@ -17,7 +17,6 @@ from ts_utils.mypy import mypy_configuration_from_distribution
 from ts_utils.mypy import temporary_mypy_config_file
 from ts_utils.paths import allowlists_path
 from ts_utils.utils import allowlist_stubtest_arguments
-from ts_utils.utils import colored
 from ts_utils.utils import get_mypy_req
 from ts_utils.utils import print_divider
 from ts_utils.utils import print_error
@@ -147,33 +146,26 @@ class Stubtest(ErrorGeneratorBase):
 
         stubtest_settings = metadata.stubtest_settings
         if stubtest_settings.skip:
-            self.logger.debug(colored("skipping (skip = true)", "yellow"))
+            self.logger.debug("skipping (skip = true)")
             return True
 
         if (
             stubtest_settings.supported_platforms is not None
             and sys.platform not in stubtest_settings.supported_platforms
         ):
-            self.logger.debug(
-                colored("skipping (platform not supported)", "yellow")
-            )
+            self.logger.debug("skipping (platform not supported)")
             return True
 
         if (
             ci_platforms_only
             and sys.platform not in stubtest_settings.ci_platforms
         ):
-            self.logger.debug(
-                colored("skipping (platform skipped in CI)", "yellow")
-            )
+            self.logger.debug("skipping (platform skipped in CI)", "yellow")
             return True
 
         if not metadata.requires_python.contains(PYTHON_VERSION):
             self.logger.debug(
-                colored(
-                    f"skipping (requires Python {metadata.requires_python})",
-                    "yellow",
-                )
+                f"skipping (requires Python {metadata.requires_python})"
             )
             return True
 
@@ -278,7 +270,7 @@ class Stubtest(ErrorGeneratorBase):
                 self._print_command_output(e)
 
                 print_divider()
-                self.logger.debug("Python version: ", flush=True)
+                self.logger.debug("Python version: ")
                 ret = subprocess.run(
                     [sys.executable, "-VV"], capture_output=True, check=False
                 )
@@ -293,7 +285,7 @@ class Stubtest(ErrorGeneratorBase):
                 self._print_command_output(ret)
                 if keep_tmp_dir:
                     self.logger.debug(
-                        "Path to virtual environment:", venv_dir, flush=True
+                        f"Path to virtual environment: {venv_dir}"
                     )
 
                 print_divider()

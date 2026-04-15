@@ -21,11 +21,10 @@ class ForkAndPRPyi(ForkAndPRBase):
     ) -> Iterable[Path]:
         for stub_tuple in stub_tuples:
             pyi_path = stub_tuple.pyi_path.absolute()
-            relative = pyi_path.relative_to(stubs_root.absolute())
+            relative = self.repo_path / pyi_path.relative_to(
+                stubs_root.absolute()
+            )
             target = Path(tmp_dir) / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             copy2(pyi_path, target)
             yield target.relative_to(tmp_dir)
-            py_typed = self._stage_py_typed(tmp_dir, target.parent)
-            if py_typed is not None:
-                yield py_typed

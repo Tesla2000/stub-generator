@@ -1,5 +1,6 @@
 import subprocess
 import tempfile
+from abc import ABC
 from abc import abstractmethod
 from collections.abc import Iterable
 from pathlib import Path
@@ -38,7 +39,7 @@ GithubToken = Annotated[
 ]
 
 
-class ForkAndPRBase(BaseModel):
+class ForkAndPRBase(BaseModel, ABC):
     model_config = ConfigDict(frozen=True)
 
     repo_name: RepoName
@@ -47,6 +48,7 @@ class ForkAndPRBase(BaseModel):
         default="python-interface",
         description="Branch name to create in the fork",
     )
+    repo_path: Path = Path()
     commit_message: str
     logger: PydanticLogger = PydanticLogger(name=__name__)
 

@@ -21,14 +21,19 @@ class Mypy(ErrorGeneratorBase):
             else f"{stubs_dir}{os.pathsep}{existing}"
         )
         result = subprocess.run(
-            ["mypy", "--strict"] + list(map(str, pyi_paths)),
+            ["mypy", "--strict", "--show-absolute-path"]
+            + list(map(str, pyi_paths)),
             capture_output=True,
             text=True,
             env=env,
         )
         if result.returncode == 0:
             return {}
-        return {
+        if result.returncode != 1:
+            raise ValueError(
+                f"{Mypy.__name__} error generation failed\nStdout: {result.stdout}\nStderr: {result.stderr}"
+            )
+        errors = {
             pyi: lines
             for pyi in pyi_paths
             if (
@@ -39,3 +44,5 @@ class Mypy(ErrorGeneratorBase):
                 ]
             )
         }
+        assert errors, "Result couldn't be divided to files"
+        return errors
