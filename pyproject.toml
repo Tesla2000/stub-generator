@@ -15,7 +15,6 @@ dependencies = [
     "langchain>=1.2.14",
     "langchain-google-genai>=4.2.1",
     "langchain-openai>=1.1.12",
-    "mypy>=1.19.1",
     "pydantic>=2.12.5",
     "pydantic-logger",
     "pydantic-settings>=2.13.0",
@@ -33,6 +32,7 @@ dependencies = [
     "packaging",
     "pathspec",
     "typing_extensions",
+    "pytype>=2024.10.11",
 ]
 
 [tool.mypy]

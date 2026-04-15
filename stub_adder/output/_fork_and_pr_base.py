@@ -1,10 +1,9 @@
 import subprocess
 import tempfile
+from abc import abstractmethod
 from collections.abc import Iterable
 from pathlib import Path
-from shutil import copy2
 from typing import Annotated
-from typing import Literal
 
 from github import Github
 from github.Repository import Repository
@@ -39,18 +38,16 @@ GithubToken = Annotated[
 ]
 
 
-class ForkAndPR(BaseModel):
-    """Forks a repository, commits stub changes on a new branch, and opens a draft PR."""
-
+class ForkAndPRBase(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    type: Literal["fork_and_pr"] = "fork_and_pr"
     repo_name: RepoName
     github_token: GithubToken
     branch_name: str = Field(
         default="python-interface",
         description="Branch name to create in the fork",
     )
+    commit_message: str
     logger: PydanticLogger = PydanticLogger(name=__name__)
 
     def _git(self, repo_dir: str, *args: str) -> str:
@@ -62,6 +59,21 @@ class ForkAndPR(BaseModel):
         )
         return result.stdout.strip()
 
+    def _stage_py_typed(self, tmp_dir: str, directory: Path) -> Path | None:
+        py_typed = directory / "py.typed"
+        if not py_typed.exists():
+            py_typed.touch()
+            return py_typed.relative_to(tmp_dir)
+        return None
+
+    @abstractmethod
+    def _stage_files(
+        self,
+        stub_tuples: Iterable[_StubTuple],
+        tmp_dir: str,
+        stubs_root: Path,
+    ) -> Iterable[Path]: ...
+
     def save(
         self, stub_tuples: Iterable[_StubTuple], stubs_root: Path
     ) -> Repository:
@@ -70,7 +82,7 @@ class ForkAndPR(BaseModel):
         upstream = gh.get_repo(self.repo_name)
         user = gh.get_user()
 
-        fork = user.create_fork(upstream)
+        fork = user.create_fork(upstream)  # type: ignore[union-attr]
         self.logger.debug(f"Forked {upstream.full_name} -> {fork.full_name}")
 
         authenticated_url = fork.clone_url.replace(
@@ -78,37 +90,38 @@ class ForkAndPR(BaseModel):
         )
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            self.logger.debug(f"Cloning fork into {tmp_dir}...")
-            self._git(tmp_dir, "init")
-            self._git(tmp_dir, "remote", "add", "origin", authenticated_url)
-            self._git(tmp_dir, "fetch", "origin")
-
             default_branch = fork.default_branch
-            self._git(tmp_dir, "checkout", default_branch)
-            self._git(tmp_dir, "pull", "origin", default_branch)
+            self.logger.debug(f"Cloning fork into {tmp_dir}...")
+            subprocess.run(
+                [
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
+                    "--single-branch",
+                    "--branch",
+                    default_branch,
+                    authenticated_url,
+                    tmp_dir,
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
             self.logger.debug(f"Checked out {default_branch}")
 
             self._git(tmp_dir, "checkout", "-b", self.branch_name)
             self.logger.debug(f"Created branch {self.branch_name}")
 
-            for stub_tuple in stub_tuples:
-                pyi_path = stub_tuple.pyi_path.absolute()
-                relative = pyi_path.relative_to(stubs_root.absolute())
-                target = Path(tmp_dir) / relative
-                target.parent.mkdir(parents=True, exist_ok=True)
-                copy2(pyi_path, target)
-                self._git(
-                    tmp_dir,
-                    "add",
-                    str(target.relative_to(tmp_dir)),
-                )
-                self.logger.debug(f"Staged {target}")
+            paths = list(self._stage_files(stub_tuples, tmp_dir, stubs_root))
+            self._git(tmp_dir, "add", *map(str, paths))
+            self.logger.debug(f"Staged {len(paths)} files")
 
             self._git(
                 tmp_dir,
                 "commit",
                 "-m",
-                f"Add type stubs for {self.branch_name}",
+                self.commit_message,
             )
             try:
                 self._git(tmp_dir, "push", "-u", "origin", self.branch_name)

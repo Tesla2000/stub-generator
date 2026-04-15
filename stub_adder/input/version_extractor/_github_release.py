@@ -1,4 +1,4 @@
-import subprocess
+import re
 from pathlib import Path
 from typing import Annotated
 from typing import Literal
@@ -9,6 +9,8 @@ from pydantic import Field
 from pydantic import SecretStr
 
 from stub_adder.input.version_extractor._base import VersionExtractorBase
+
+_VERSION_RE = re.compile(r"^v?\d+\.\d+")
 
 GithubToken = Annotated[
     SecretStr,
@@ -27,7 +29,6 @@ class GithubReleaseExtractor(VersionExtractorBase):
         token = (
             self.github_token.get_secret_value() if self.github_token else None
         )
-        # Bad credentials or unknown repo propagate — input/config errors
         repo = Github(token).get_repo(self.repo_name)
 
         # EAFP: repo may simply have no releases yet
@@ -37,10 +38,6 @@ class GithubReleaseExtractor(VersionExtractorBase):
             return None
 
         tag = release.tag_name
-        # Checkout must succeed — failure means misconfigured clone, propagate
-        subprocess.run(
-            ["git", "-C", str(repo_path), "checkout", tag],
-            check=True,
-            capture_output=True,
-        )
+        if not _VERSION_RE.match(tag):
+            return None
         return tag.lstrip("v")
