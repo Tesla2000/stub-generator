@@ -21,7 +21,7 @@ class ForkAndPRMergePy(ForkAndPRBase):
     ) -> Iterable[Path]:
         for stub_tuple in stub_tuples:
             pyi_path = stub_tuple.pyi_path.absolute()
-            relative_py = pyi_path.relative_to(
+            relative_py = self.repo_path / pyi_path.relative_to(
                 stubs_root.absolute()
             ).with_suffix(".py")
             target_py = Path(tmp_dir) / relative_py
@@ -34,6 +34,3 @@ class ForkAndPRMergePy(ForkAndPRBase):
                 text=True,
             )
             yield relative_py
-            py_typed = self._stage_py_typed(tmp_dir, target_py.parent)
-            if py_typed is not None:
-                yield py_typed

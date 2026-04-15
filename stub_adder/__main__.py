@@ -22,7 +22,12 @@ class Main(BaseSettings):
 
     output_path: Path
 
-    logging_config: LoggingConfig = LoggingConfig(level="DEBUG")
+    logging_config: LoggingConfig = LoggingConfig(
+        level="DEBUG",
+        logger_to_level={
+            "stub_adder.transformer.error_generator._stubtest": "WARNING"
+        },
+    )
 
     input: AnyInput
     transformer: FixErrors = Field(default_factory=FixErrors)
