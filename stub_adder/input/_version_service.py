@@ -23,4 +23,4 @@ class VersionService(BaseModel):
             version = extractor(repo_path)
             if version:
                 return _format_version(version)
-        return "0.0.*"
+        raise ValueError("Version couldn't be extracted")

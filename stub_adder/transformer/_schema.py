@@ -62,5 +62,7 @@ _STUB_RULES = (
     "Never use object as a type annotation — replace every ': object' with ': Any'. "
     "When mypy reports a Liskov substitution principle violation on an overridden method, "
     "read the error carefully — it tells you the exact type the supertype defines. "
-    "Use that type verbatim in the override."
+    "Use that type verbatim in the override. "
+    "Use object instead of Any where possible. "
+    "Use MutableMapping instead of dict and MutableSequence instead of list wherever possible."
 )

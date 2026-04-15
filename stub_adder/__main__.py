@@ -3,6 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from pydantic import Field
+from pydantic_logger import LoggingConfig
 from pydantic_settings import BaseSettings
 from pydantic_settings import CliApp
 from pydantic_settings import SettingsConfigDict
@@ -21,11 +22,14 @@ class Main(BaseSettings):
 
     output_path: Path
 
+    logging_config: LoggingConfig = LoggingConfig(level="DEBUG")
+
     input: AnyInput
     transformer: FixErrors = Field(default_factory=FixErrors)
     outputs: tuple[AnyOutput, ...] = Field(min_length=1)
 
     async def cli_cmd(self) -> None:
+        self.logging_config.apply()
         stub_tuples = tuple(self.input.generate(self.output_path))
         transformed_tuples = self.transformer.transform(
             stub_tuples, self.output_path

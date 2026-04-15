@@ -15,7 +15,7 @@ class TestIntegrationGoogleAuth(TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             stub_generator = StubGenerator(
-                stubbed_repo_url=google_auth_url, paths=[Path("google")]
+                stubbed_repo_url=google_auth_url, stubbed_path=Path("google")
             )
             stub_tuples = tuple(stub_generator.generate(Path(tmp)))
             layers = tuple(topo_layers(stub_tuples))

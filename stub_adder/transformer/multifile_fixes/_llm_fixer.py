@@ -11,6 +11,8 @@ from langchain_openai import ChatOpenAI
 from pydantic import Discriminator
 from pydantic import Field
 from pydantic import Tag
+from pydantic import ValidationError
+from pydantic_logger import PydanticLogger
 
 from stub_adder._stub_tuple import _StubTuple
 from stub_adder.transformer._provider import get_provider
@@ -21,19 +23,23 @@ from stub_adder.transformer._schema import _StubOutput
 from stub_adder.transformer._schema import _StubOutputPath
 from stub_adder.transformer.multifile_fixes._base import MultiFileFix
 
+ChatModel = Annotated[
+    Union[
+        Annotated[ChatGoogleGenerativeAI, Tag(Provider.GEMINI)],
+        Annotated[ChatOpenAI, Tag(Provider.OPENAI)],
+    ],
+    Discriminator(get_provider),
+]
+
 
 class LlmFixer(MultiFileFix):
     type: Literal["llm"] = "llm"
     max_attempts: int = 3
-    chat_model: Annotated[
-        Union[
-            Annotated[ChatGoogleGenerativeAI, Tag(Provider.GEMINI)],
-            Annotated[ChatOpenAI, Tag(Provider.OPENAI)],
-        ],
-        Discriminator(get_provider),
-    ] = Field(
-        default_factory=lambda: ChatOpenAI(model="gpt-5-nano", temperature=0)
+    chat_model: ChatModel = Field(
+        default_factory=lambda: ChatOpenAI(model="gpt-5-nano", temperature=0),
+        exclude=True,
     )
+    logger: PydanticLogger = PydanticLogger(name=__name__)
 
     def is_applicable(self, errors: Iterable[str]) -> bool:
         return any(True for _ in errors)
@@ -96,19 +102,30 @@ class LlmFixer(MultiFileFix):
         context_parts: list[str],
         target_stubs: list[_StubTuple],
     ) -> list[_StubOutputPath]:
-        output_files = self.chat_model.with_structured_output(
-            _OutputSchema
-        ).invoke(
-            [
-                SystemMessage(system_message),
-                HumanMessage(
-                    "\n\n".join(context_parts)
-                    + f"\n\n\nHere is a list of stub output paths you need to return "
-                    f"{_StubOutput.__name__} for: "
-                    + ", ".join(str(s.pyi_path) for s in target_stubs)
-                ),
-            ]
-        )
+        try:
+            output_files = self.chat_model.with_structured_output(
+                _OutputSchema
+            ).invoke(
+                [
+                    SystemMessage(system_message),
+                    HumanMessage(
+                        "\n\n".join(context_parts)
+                        + f"\n\n\nHere is a list of stub output paths you need to return "
+                        f"{_StubOutput.__name__} for: "
+                        + ", ".join(str(s.pyi_path) for s in target_stubs)
+                    ),
+                ]
+            )
+        except ValidationError as e:
+            self.logger.error(
+                "\n\n".join(
+                    f"{error_details['msg']}\n{error_details['input']}"
+                    for error_details in e.errors(
+                        include_url=False, include_context=False
+                    )
+                )
+            )
+            raise e
         assert isinstance(output_files, _OutputSchema)
         return list(
             map(_StubOutputPath.from_stub_output, output_files.stub_outputs)
