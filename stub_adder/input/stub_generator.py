@@ -4,9 +4,9 @@ import sys
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlparse
 
-import tomli
 import tomlkit
 from pydantic import BaseModel, Field, HttpUrl
 from pydantic_logger import PydanticLogger
@@ -15,13 +15,10 @@ from ts_utils.utils import get_mypy_req
 
 from stub_adder._stub_tuple import _StubTuple
 from stub_adder.input._version_service import VersionService
+from stub_adder.input.types import InputType
 from stub_adder.input.version_extractor import (
     GithubReleaseExtractor,
-    InstalledPackageExtractor,
     PipPackageVersionExtractor,
-    PyprojectTomlExtractor,
-    SetupCfgExtractor,
-    SetupPyExtractor,
 )
 
 
@@ -38,15 +35,13 @@ def _default_version_service(data: dict[str, object]) -> VersionService:
         extractors=(
             PipPackageVersionExtractor(package_name=path.name),
             GithubReleaseExtractor(repo_name=repo_name),
-            PyprojectTomlExtractor(),
-            SetupCfgExtractor(),
-            SetupPyExtractor(),
-            InstalledPackageExtractor(),
         )
     )
 
 
 class StubGenerator(BaseModel):
+    type: Literal[InputType.STUB_GENERATOR] = InputType.STUB_GENERATOR
+
     logger: PydanticLogger = PydanticLogger(name=__name__)
     stubbed_repo_url: HttpUrl
     stubbed_path: Path
@@ -117,15 +112,6 @@ class StubGenerator(BaseModel):
         if sys.platform == "win32":
             return self.venv_path / "Lib" / "site-packages"
         return next((self.venv_path / "lib").glob("python*/site-packages"))
-
-    @staticmethod
-    def _extract_package_name(repo_path: Path) -> Path:
-        pyproject_toml = repo_path / "pyproject.toml"
-        if pyproject_toml.exists():
-            data = tomli.loads(pyproject_toml.read_text())
-            if "project" in data and "name" in data["project"]:
-                return Path(data["project"]["name"])
-        return repo_path
 
     @staticmethod
     def _generate_stubs(paths: Iterable[Path], output_dir: Path) -> None:

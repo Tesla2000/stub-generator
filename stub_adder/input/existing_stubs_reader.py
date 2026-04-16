@@ -1,10 +1,12 @@
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_logger import PydanticLogger
 
 from stub_adder._stub_tuple import _StubTuple
+from stub_adder.input.types import InputType
 
 
 class ExistingStubsReader(BaseModel):
@@ -13,6 +15,7 @@ class ExistingStubsReader(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    type: Literal[InputType.EXISTING_STUBS] = InputType.EXISTING_STUBS
     stubs_dir: Path
     sources_dir: Path
     logger: PydanticLogger = Field(

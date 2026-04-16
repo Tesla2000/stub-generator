@@ -6,6 +6,7 @@ from github import Github, GithubException
 from pydantic import Field, SecretStr
 
 from stub_adder.input.version_extractor._base import VersionExtractorBase
+from stub_adder.input.version_extractor.types import VersionExtractorType
 
 _VERSION_RE = re.compile(r"^v?\d+\.\d+")
 
@@ -18,7 +19,9 @@ GithubToken = Annotated[
 
 
 class GithubReleaseExtractor(VersionExtractorBase):
-    type: Literal["github_release"] = "github_release"
+    type: Literal[VersionExtractorType.GITHUB_RELEASE] = (
+        VersionExtractorType.GITHUB_RELEASE
+    )
     repo_name: str = Field(description="Repository in 'owner/repo' format")
     github_token: GithubToken | None = None
 

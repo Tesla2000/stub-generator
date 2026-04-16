@@ -1,11 +1,11 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 from pydantic_logger import PydanticLogger
 
 
-class VersionExtractorBase(BaseModel):
+class VersionExtractorBase(BaseModel, ABC):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     logger: PydanticLogger = PydanticLogger(name=__name__)

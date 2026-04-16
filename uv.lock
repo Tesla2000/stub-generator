@@ -2020,7 +2020,7 @@ wheels = [
 
 [[package]]
 name = "stub-added"
-version = "0.1.9"
+version = "0.1.10"
 source = { editable = "." }
 dependencies = [
     { name = "autoflake" },
@@ -2032,6 +2032,8 @@ dependencies = [
     { name = "langchain" },
     { name = "langchain-google-genai" },
     { name = "langchain-openai" },
+    { name = "mypy" },
+    { name = "mypy-extensions" },
     { name = "packaging" },
     { name = "pathspec" },
     { name = "pydantic" },
@@ -2054,7 +2056,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "mypy" },
     { name = "pytest" },
 ]
 
@@ -2069,6 +2070,8 @@ requires-dist = [
     { name = "langchain", specifier = ">=1.2.14" },
     { name = "langchain-google-genai", specifier = ">=4.2.1" },
     { name = "langchain-openai", specifier = ">=1.1.12" },
+    { name = "mypy", specifier = ">=1.20.1" },
+    { name = "mypy-extensions", specifier = ">=1.1.0" },
     { name = "packaging" },
     { name = "pathspec" },
     { name = "pydantic", specifier = ">=2.12.5" },
@@ -2090,10 +2093,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.20.1" },
-    { name = "pytest", specifier = ">=9.0.2" },
-]
+dev = [{ name = "pytest", specifier = ">=9.0.2" }]
 
 [[package]]
 name = "tabulate"

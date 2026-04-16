@@ -160,6 +160,49 @@ def find_class_module(
     return _scan_package_dir(class_name, module, stubs_dir)
 
 
+def find_class_by_annotation_attr(
+    class_name: str, tree: ast.Module, stubs_dir: Path
+) -> str | None:
+    """Find the module for `class_name` by scanning attribute expressions in
+    the annotations of `tree` itself (e.g. ``google.auth.crypt.Signer`` → ``google.auth.crypt.base``).
+
+    Used when `class_name` was introduced as a bare name by a fixer but the
+    original file references it only through a dotted attribute in some other
+    annotation, not through a plain ``from ... import`` statement.
+    """
+    for node in ast.walk(tree):
+        ann: ast.expr | None = None
+        if isinstance(node, ast.arg):
+            ann = node.annotation
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            ann = node.returns
+        elif isinstance(node, ast.AnnAssign):
+            ann = node.annotation
+        if ann is None:
+            continue
+        for sub in ast.walk(ann):
+            if not isinstance(sub, ast.Attribute) or sub.attr != class_name:
+                continue
+            mod_expr = ast.unparse(sub.value)
+            stub = _stub_path(mod_expr, stubs_dir)
+            if stub is None:
+                continue
+            try:
+                text = stub.read_text()
+            except OSError:
+                continue
+            if _is_real_class(class_name, text):
+                return mod_expr
+            inner = ast.parse(text)
+            result = find_class_module(class_name, inner, stubs_dir)
+            if result is not None:
+                return result
+            result = _scan_package_dir(class_name, mod_expr, stubs_dir)
+            if result is not None:
+                return result
+    return None
+
+
 def find_name_in_supertype_stubs(
     name: str,
     supertype_modules: list[str],

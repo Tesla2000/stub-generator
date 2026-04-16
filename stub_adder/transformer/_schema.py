@@ -56,11 +56,10 @@ _STUB_RULES = (
     "it will be reported as an unused ignore. Overload sets in stubs do not need it. "
     "In stub files, always use '= ...' for default parameter values, never the actual "
     "default value (e.g. 'default: None = ...' not 'default: None = None'). "
-    "Always type *args as *args: Any and **kwargs as **kwargs: Any. "
-    "Never use object as a type annotation — replace every ': object' with ': Any'. "
+    "Always type *args as *args: object and **kwargs as **kwargs: object. "
+    "Never use Any. Always use object if the type is unknown. "
     "When mypy reports a Liskov substitution principle violation on an overridden method, "
     "read the error carefully — it tells you the exact type the supertype defines. "
     "Use that type verbatim in the override. "
-    "Use object instead of Any where possible. "
     "Use MutableMapping instead of dict and MutableSequence instead of list wherever possible."
 )
