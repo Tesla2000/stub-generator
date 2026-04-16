@@ -3,8 +3,7 @@ import re
 import textwrap
 from collections.abc import Iterable
 from pathlib import Path
-from typing import ClassVar
-from typing import Literal
+from typing import ClassVar, Literal
 
 from stub_adder.transformer.file_fix._base import ManualFix
 

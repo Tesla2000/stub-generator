@@ -1,5 +1,4 @@
-from enum import auto
-from enum import StrEnum
+from enum import StrEnum, auto
 
 
 class TransformerType(StrEnum):

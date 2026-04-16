@@ -1,15 +1,16 @@
 import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import ClassVar
-from typing import Literal
+from typing import ClassVar, Literal
 
 import tomlkit
-from ts_utils.metadata import get_pypi_name_to_typeshed_name_mapping
-from ts_utils.metadata import get_recursive_requirements
-from ts_utils.metadata import read_dependencies
-from ts_utils.metadata import read_metadata
-from ts_utils.metadata import read_stubtest_settings
+from ts_utils.metadata import (
+    get_pypi_name_to_typeshed_name_mapping,
+    get_recursive_requirements,
+    read_dependencies,
+    read_metadata,
+    read_stubtest_settings,
+)
 
 from stub_adder._stub_tuple import _StubTuple
 from stub_adder.transformer.multifile_fixes._base import MultiFileFix

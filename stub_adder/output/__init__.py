@@ -1,5 +1,4 @@
-from enum import auto
-from enum import StrEnum
+from enum import StrEnum, auto
 from typing import Union
 
 from stub_adder.output._fork_and_pr_base import ForkAndPRBase

@@ -1,26 +1,21 @@
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Annotated
-from typing import Literal
-from typing import Union
+from typing import Annotated, Literal, Union
 
-from langchain_core.messages import HumanMessage
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
-from pydantic import Discriminator
-from pydantic import Field
-from pydantic import Tag
-from pydantic import ValidationError
+from pydantic import Discriminator, Field, Tag, ValidationError
 from pydantic_logger import PydanticLogger
 
 from stub_adder._stub_tuple import _StubTuple
-from stub_adder.transformer._provider import get_provider
-from stub_adder.transformer._provider import Provider
-from stub_adder.transformer._schema import _OutputSchema
-from stub_adder.transformer._schema import _STUB_RULES
-from stub_adder.transformer._schema import _StubOutput
-from stub_adder.transformer._schema import _StubOutputPath
+from stub_adder.transformer._provider import Provider, get_provider
+from stub_adder.transformer._schema import (
+    _STUB_RULES,
+    _OutputSchema,
+    _StubOutput,
+    _StubOutputPath,
+)
 from stub_adder.transformer.multifile_fixes._base import MultiFileFix
 
 ChatModel = Annotated[

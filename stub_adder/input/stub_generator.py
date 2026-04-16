@@ -8,26 +8,21 @@ from urllib.parse import urlparse
 
 import tomli
 import tomlkit
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 from pydantic_logger import PydanticLogger
-from ts_utils.metadata import get_recursive_requirements
-from ts_utils.metadata import read_metadata
+from ts_utils.metadata import get_recursive_requirements, read_metadata
 from ts_utils.utils import get_mypy_req
 
 from stub_adder._stub_tuple import _StubTuple
 from stub_adder.input._version_service import VersionService
-from stub_adder.input.version_extractor import GithubReleaseExtractor
 from stub_adder.input.version_extractor import (
+    GithubReleaseExtractor,
     InstalledPackageExtractor,
-)
-from stub_adder.input.version_extractor import PipPackageVersionExtractor
-from stub_adder.input.version_extractor import (
+    PipPackageVersionExtractor,
     PyprojectTomlExtractor,
+    SetupCfgExtractor,
+    SetupPyExtractor,
 )
-from stub_adder.input.version_extractor import SetupCfgExtractor
-from stub_adder.input.version_extractor import SetupPyExtractor
 
 
 def _default_version_service(data: dict[str, object]) -> VersionService:

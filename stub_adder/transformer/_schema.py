@@ -1,9 +1,7 @@
 from pathlib import Path
-from typing import Annotated
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import AfterValidator
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel
 
 from stub_adder.transformer.stub_postprocessor import postprocess_stub
 

@@ -52,6 +52,10 @@ members = ["typeshed/lib"]
 pydantic-logger = { git = "https://github.com/Tesla2000/pydantic-logger" }
 ts-utils = { workspace = true }
 
+[tool.isort]
+profile = "black"
+known_first_party = ["stub_adder", "typeshed"]
+
 [dependency-groups]
 dev = [
     "mypy>=1.20.1",

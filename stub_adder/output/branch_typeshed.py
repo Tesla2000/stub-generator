@@ -5,9 +5,7 @@ from pathlib import Path
 from shutil import copy2
 from typing import Literal
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_logger import PydanticLogger
 
 from stub_adder._stub_tuple import _StubTuple

@@ -5,14 +5,15 @@ import re
 from collections.abc import Iterable
 from functools import cache
 from pathlib import Path
-from typing import ClassVar
-from typing import Literal
+from typing import ClassVar, Literal
 
 import autoimport
 import mypy
 
-from stub_adder.transformer._class_finder import find_class_module
-from stub_adder.transformer._class_finder import find_name_in_supertype_stubs
+from stub_adder.transformer._class_finder import (
+    find_class_module,
+    find_name_in_supertype_stubs,
+)
 from stub_adder.transformer.file_fix._base import ManualFix
 
 

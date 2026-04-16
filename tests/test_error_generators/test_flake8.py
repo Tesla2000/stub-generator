@@ -1,11 +1,9 @@
 import tempfile
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from stub_adder.transformer.error_generator._flake8 import Flake8
-from stub_adder.transformer.error_generator._flake8 import Flake8Config
+from stub_adder.transformer.error_generator._flake8 import Flake8, Flake8Config
 
 
 class TestFlake8Generate(TestCase):

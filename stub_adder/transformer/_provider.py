@@ -1,7 +1,5 @@
-from enum import auto
-from enum import StrEnum
-from typing import Any
-from typing import Optional
+from enum import StrEnum, auto
+from typing import Any, Optional
 
 
 class Provider(StrEnum):

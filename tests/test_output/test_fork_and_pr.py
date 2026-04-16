@@ -2,8 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import SecretStr
@@ -43,47 +42,20 @@ class TestForkAndPRPyiStageFiles(TestCase):
 
     def test_copies_pyi_to_clone(self):
         stub = self._make_stub("pkg/__init__.pyi")
-        with patch("subprocess.run", return_value=_make_git_mock()):
+        list(
             self.service._stage_files([stub], self.clone_dir, self.stubs_root)
+        )
         target = Path(self.clone_dir) / "pkg" / "__init__.pyi"
         self.assertTrue(target.exists())
         self.assertEqual(target.read_text(), "def foo() -> None: ...\n")
 
-    def test_creates_py_typed(self):
-        stub = self._make_stub("pkg/__init__.pyi")
-        with patch("subprocess.run", return_value=_make_git_mock()):
-            self.service._stage_files([stub], self.clone_dir, self.stubs_root)
-        self.assertTrue((Path(self.clone_dir) / "pkg" / "py.typed").exists())
-
-    def test_skips_existing_py_typed(self):
-        stub = self._make_stub("pkg/__init__.pyi")
-        py_typed = Path(self.clone_dir) / "pkg" / "py.typed"
-        py_typed.parent.mkdir(parents=True, exist_ok=True)
-        py_typed.touch()
-        calls = []
-        with patch(
-            "subprocess.run",
-            side_effect=lambda cmd, **kw: calls.append(cmd)
-            or _make_git_mock(),
-        ):
-            self.service._stage_files([stub], self.clone_dir, self.stubs_root)
-        added = [c for c in calls if "add" in c]
-        self.assertFalse(any("py.typed" in str(c) for c in added))
-
-    def test_stages_pyi_and_py_typed_via_git(self):
+    def test_returns_relative_pyi_path(self):
         stub = self._make_stub("pkg/mod.pyi")
-        staged = []
-
-        def fake_run(cmd, **kw):
-            staged.append(cmd)
-            return _make_git_mock()
-
-        with patch("subprocess.run", side_effect=fake_run):
+        result = list(
             self.service._stage_files([stub], self.clone_dir, self.stubs_root)
-        add_args = [c for c in staged if "add" in c]
-        staged_files = [c[-1] for c in add_args]
-        self.assertTrue(any(".pyi" in f for f in staged_files))
-        self.assertTrue(any("py.typed" in f for f in staged_files))
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn(".pyi", str(result[0]))
 
     def test_type_is_fork_and_pr_pyi(self):
         self.assertEqual(self.service.type, "fork_and_pr_pyi")
@@ -108,7 +80,9 @@ class TestForkAndPRMergePyStageFiles(TestCase):
         pyi = self.stubs_root / relative
         pyi.parent.mkdir(parents=True, exist_ok=True)
         pyi.write_text("def foo() -> None: ...\n")
-        return _StubTuple(py_path=pyi.with_suffix(".py"), pyi_path=pyi)
+        py = pyi.with_suffix(".py")
+        py.write_text("def foo(): pass\n")
+        return _StubTuple(py_path=py, pyi_path=pyi)
 
     def test_calls_merge_pyi_with_correct_paths(self):
         stub = self._make_stub("pkg/mod.pyi")
@@ -118,30 +92,27 @@ class TestForkAndPRMergePyStageFiles(TestCase):
             side_effect=lambda cmd, **kw: calls.append(cmd)
             or _make_git_mock(),
         ):
-            self.service._stage_files([stub], self.clone_dir, self.stubs_root)
+            list(
+                self.service._stage_files(
+                    [stub], self.clone_dir, self.stubs_root
+                )
+            )
         merge_calls = [c for c in calls if "merge-pyi" in c]
         self.assertEqual(len(merge_calls), 1)
         cmd = merge_calls[0]
         self.assertIn(str(Path(self.clone_dir) / "pkg" / "mod.py"), cmd)
         self.assertIn(str(stub.pyi_path.absolute()), cmd)
 
-    def test_stages_py_file_via_git(self):
-        stub = self._make_stub("pkg/mod.pyi")
-        staged = []
-        with patch(
-            "subprocess.run",
-            side_effect=lambda cmd, **kw: staged.append(cmd)
-            or _make_git_mock(),
-        ):
-            self.service._stage_files([stub], self.clone_dir, self.stubs_root)
-        add_args = [c for c in staged if "add" in c]
-        self.assertTrue(any("mod.py" in str(c) for c in add_args))
-
-    def test_creates_py_typed(self):
+    def test_returns_relative_py_path(self):
         stub = self._make_stub("pkg/mod.pyi")
         with patch("subprocess.run", return_value=_make_git_mock()):
-            self.service._stage_files([stub], self.clone_dir, self.stubs_root)
-        self.assertTrue((Path(self.clone_dir) / "pkg" / "py.typed").exists())
+            result = list(
+                self.service._stage_files(
+                    [stub], self.clone_dir, self.stubs_root
+                )
+            )
+        self.assertEqual(len(result), 1)
+        self.assertIn("mod.py", str(result[0]))
 
     def test_type_is_fork_and_pr_merge_py(self):
         self.assertEqual(self.service.type, "fork_and_pr_merge_py")

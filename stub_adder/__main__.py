@@ -4,9 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_logger import LoggingConfig
-from pydantic_settings import BaseSettings
-from pydantic_settings import CliApp
-from pydantic_settings import SettingsConfigDict
+from pydantic_settings import BaseSettings, CliApp, SettingsConfigDict
 
 from stub_adder.input import AnyInput
 from stub_adder.output import AnyOutput

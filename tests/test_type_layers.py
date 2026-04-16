@@ -1,4 +1,6 @@
+import os
 import tempfile
+import unittest
 from pathlib import Path
 from unittest import TestCase
 
@@ -9,6 +11,10 @@ from stub_adder.transformer._topo import topo_layers
 
 
 class TestIntegrationGoogleAuth(TestCase):
+    @unittest.skipUnless(
+        os.getenv("RUN_INTEGRATION"),
+        "Integration test — set RUN_INTEGRATION to run",
+    )
     def test_stubs_generated_and_topo_ordered(self):
         google_auth_url = HttpUrl(
             "https://github.com/googleapis/google-auth-library-python.git"

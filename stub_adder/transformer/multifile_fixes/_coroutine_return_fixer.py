@@ -2,8 +2,7 @@ import ast
 import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import ClassVar
-from typing import Literal
+from typing import ClassVar, Literal
 
 from stub_adder._stub_tuple import _StubTuple
 from stub_adder.transformer.error_generator import Mypy
