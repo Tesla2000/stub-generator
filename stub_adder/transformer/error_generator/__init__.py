@@ -1,5 +1,4 @@
-from typing import Annotated
-from typing import Union
+from typing import Annotated, Union
 
 from pydantic import Discriminator
 

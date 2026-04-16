@@ -44,7 +44,7 @@ class TestPyupgrade(TestCase):
         self.assertIn("int | None", pyi2.read_text())
 
     def test_default_min_version(self):
-        self.assertEqual(self.pyupgrade.min_version, (3, 9))
+        self.assertEqual(self.pyupgrade.min_version, (3, 10))
 
     def test_type_is_pyupgrade(self):
         self.assertEqual(self.pyupgrade.type, "pyupgrade")

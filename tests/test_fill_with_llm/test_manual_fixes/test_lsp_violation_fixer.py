@@ -4,9 +4,7 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from stub_adder.transformer.multifile_fixes import (
-    LspViolationFixer,
-)
+from stub_adder.transformer.multifile_fixes import LspViolationFixer
 
 
 def _mypy_errors(path: Path) -> list[str]:
@@ -57,7 +55,7 @@ class TestLspViolationFixer(TestCase):
 
     def test_no_errors_unchanged(self):
         src = "def foo(x: int) -> str: ...\n"
-        self.assertEqual(LspViolationFixer()(src, []), src)
+        self.assertEqual(LspViolationFixer()._fix_file(src, []), src)
 
     def test_fixes_override_errors_verified_by_mypy(self):
         pyi = self.tmp_path / "mtls.pyi"
@@ -70,7 +68,7 @@ class TestLspViolationFixer(TestCase):
             "Expected mypy to report [override] errors in the unfixed stub",
         )
 
-        fixed = LspViolationFixer()(_MTLS_STUB, errors)
+        fixed = LspViolationFixer()._fix_file(_MTLS_STUB, errors)
         pyi.write_text(fixed)
 
         remaining = [e for e in _mypy_errors(pyi) if "[override]" in e]
@@ -88,7 +86,7 @@ class TestLspViolationFixer(TestCase):
             'f.pyi:1: error: Argument 2 of "send" is incompatible with supertype "B"; '
             'supertype defines the argument type as "bytes"  [override]',
         ]
-        result = LspViolationFixer()(src, errors)
+        result = LspViolationFixer()._fix_file(src, errors)
         self.assertIn("str", result)
         self.assertNotIn("bytes", result)
 
@@ -105,7 +103,7 @@ class TestLspViolationFixer(TestCase):
             "f.pyi:1: note:      Subclass:",
             "f.pyi:1: note:          def send(self, request: int, stream: bool, timeout: bool, verify: str, cert: int) -> None",
         ]
-        result = LspViolationFixer()(src, errors)
+        result = LspViolationFixer()._fix_file(src, errors)
         self.assertIn("timeout: float", result)
         self.assertIn("verify: bool | str", result)
         self.assertIn("cert: bytes | str", result)
@@ -119,7 +117,7 @@ class TestLspViolationFixer(TestCase):
             "f.pyi:1: note:      Subclass:",
             "f.pyi:1: note:          def foo(self, *args: Any, **kwargs: Any) -> None",
         ]
-        result = LspViolationFixer()(src, errors)
+        result = LspViolationFixer()._fix_file(src, errors)
         self.assertIn("x: int", result)
         self.assertIn("y: str", result)
         self.assertNotIn("*args", result)
@@ -142,7 +140,7 @@ class TestLspViolationFixer(TestCase):
             "f.pyi:5: note:      Subclass:",
             "f.pyi:5: note:          def send(self, *args: Any, **kwargs: Any) -> None",
         ]
-        result = LspViolationFixer()(src, errors)
+        result = LspViolationFixer()._fix_file(src, errors)
         self.assertIn("PreparedRequest", result)
         self.assertIn("Response", result)
         self.assertIn("from requests", result)
@@ -163,7 +161,7 @@ class TestLspViolationFixer(TestCase):
             "f.pyi:5: note:      Subclass:",
             "f.pyi:5: note:          def send(self, *args: Any, **kwargs: Any) -> None",
         ]
-        result = LspViolationFixer()(src, errors)
+        result = LspViolationFixer()._fix_file(src, errors)
         self.assertIn("SupportsItems", result)
         self.assertIn("from _typeshed import SupportsItems", result)
 
@@ -184,7 +182,7 @@ class TestLspViolationFixer(TestCase):
             override_errors, "Expected [override] errors before fix"
         )
 
-        fixed = LspViolationFixer()(stub, errors)
+        fixed = LspViolationFixer()._fix_file(stub, errors)
         pyi.write_text(fixed)
 
         remaining = [e for e in _mypy_errors(pyi) if "[override]" in e]
@@ -209,7 +207,7 @@ class TestLspViolationFixer(TestCase):
             "f.pyi:3: note:      Subclass:",
             "f.pyi:3: note:          str | None",
         ]
-        result = LspViolationFixer()(src, errors)
+        result = LspViolationFixer()._fix_file(src, errors)
         # Should narrow back to str (superclass type)
         self.assertNotIn("str | None", result)
         self.assertIn("key_id: str", result)
@@ -231,7 +229,7 @@ class TestLspViolationFixer(TestCase):
             "f.pyi:5: note:      Subclass:",
             "f.pyi:5: note:          str | None",
         ]
-        result = LspViolationFixer()(src, errors)
+        result = LspViolationFixer()._fix_file(src, errors)
         self.assertNotIn("str | None", result)
         self.assertIn("-> str", result)
 
@@ -253,7 +251,7 @@ class TestLspViolationFixer(TestCase):
             override_errors, "Expected [override] errors before fix"
         )
 
-        fixed = LspViolationFixer()(stub, errors)
+        fixed = LspViolationFixer()._fix_file(stub, errors)
         pyi.write_text(fixed)
 
         remaining = [e for e in _mypy_errors(pyi) if "[override]" in e]
@@ -295,7 +293,7 @@ class TestLspViolationFixer(TestCase):
             override_errors, "Expected [override] errors before fix"
         )
 
-        fixed = LspViolationFixer()(stub, errors)
+        fixed = LspViolationFixer()._fix_file(stub, errors)
         pyi.write_text(fixed)
 
         remaining = [e for e in _mypy_errors(pyi) if "[override]" in e]

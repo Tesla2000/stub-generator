@@ -1,7 +1,6 @@
 from pathlib import Path
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
+from pydantic import BaseModel, ConfigDict
 
 from stub_adder.input.version_extractor import AnyVersionExtractor
 

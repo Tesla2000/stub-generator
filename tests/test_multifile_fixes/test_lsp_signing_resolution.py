@@ -94,7 +94,7 @@ class TestLspSigningResolution(TestCase):
             'supertype defines the argument type as "Signing"  [override]'
         )
 
-        result = LspViolationFixer()(
+        result = LspViolationFixer()._fix_file(
             contents=pyi.read_text(),
             errors=[error],
             stubs_dir=self.root,
@@ -130,7 +130,7 @@ class TestLspSigningResolution(TestCase):
             env={**os.environ, "MYPYPATH": str(self.root)},
         ).stdout.splitlines()
 
-        fixed = LspViolationFixer()(
+        fixed = LspViolationFixer()._fix_file(
             contents=pyi.read_text(),
             errors=[line for line in all_errors if str(pyi) in line],
             stubs_dir=self.root,

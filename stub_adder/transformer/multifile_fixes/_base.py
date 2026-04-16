@@ -1,11 +1,9 @@
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel
-from pydantic import PositiveInt
+from pydantic import BaseModel, PositiveInt
 
 from stub_adder._stub_tuple import _StubTuple
 

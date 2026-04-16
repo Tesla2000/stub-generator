@@ -7,29 +7,33 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 from time import time
-from typing import ClassVar
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic_logger import PydanticLogger
-from ts_utils.metadata import get_recursive_requirements
-from ts_utils.metadata import read_metadata
-from ts_utils.mypy import mypy_configuration_from_distribution
-from ts_utils.mypy import temporary_mypy_config_file
+from ts_utils.metadata import get_recursive_requirements, read_metadata
+from ts_utils.mypy import (
+    mypy_configuration_from_distribution,
+    temporary_mypy_config_file,
+)
 from ts_utils.paths import allowlists_path
-from ts_utils.utils import allowlist_stubtest_arguments
-from ts_utils.utils import get_mypy_req
-from ts_utils.utils import print_divider
-from ts_utils.utils import print_error
-from ts_utils.utils import print_info
-from ts_utils.utils import print_success_msg
-from ts_utils.utils import print_time
-from ts_utils.utils import print_warning
-from ts_utils.utils import PYTHON_VERSION
+from ts_utils.utils import (
+    PYTHON_VERSION,
+    allowlist_stubtest_arguments,
+    get_mypy_req,
+    print_divider,
+    print_error,
+    print_info,
+    print_success_msg,
+    print_time,
+    print_warning,
+)
 
 from stub_adder.transformer.error_generator._base import ErrorGeneratorBase
-from typeshed.tests.stubtest_third_party import run_stubtest
-from typeshed.tests.stubtest_third_party import setup_gdb_stubtest_command
-from typeshed.tests.stubtest_third_party import setup_uwsgi_stubtest_command
+from typeshed.tests.stubtest_third_party import (
+    run_stubtest,
+    setup_gdb_stubtest_command,
+    setup_uwsgi_stubtest_command,
+)
 
 _ANSI_RE: re.Pattern[str] = re.compile(r"\x1b\[[0-9;]*m")
 

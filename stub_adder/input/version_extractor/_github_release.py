@@ -1,12 +1,9 @@
 import re
 from pathlib import Path
-from typing import Annotated
-from typing import Literal
+from typing import Annotated, Literal
 
-from github import Github
-from github import GithubException
-from pydantic import Field
-from pydantic import SecretStr
+from github import Github, GithubException
+from pydantic import Field, SecretStr
 
 from stub_adder.input.version_extractor._base import VersionExtractorBase
 

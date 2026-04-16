@@ -1,8 +1,7 @@
 from abc import abstractmethod
 from pathlib import Path
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
+from pydantic import BaseModel, ConfigDict
 
 
 class ProcessBase(BaseModel):
