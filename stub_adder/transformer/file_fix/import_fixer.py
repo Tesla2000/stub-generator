@@ -11,6 +11,7 @@ import autoimport
 import mypy
 
 from stub_adder.transformer._class_finder import (
+    find_class_by_annotation_attr,
     find_class_module,
     find_name_in_supertype_stubs,
 )
@@ -173,6 +174,7 @@ class ImportFixer(ManualFix):
         Used after AST fixes that introduce new type names without corresponding imports.
         Raises RuntimeError if any annotation name cannot be resolved.
         """
+        pre_autoimport_tree = ast.parse(code)
         code = autoimport.fix_code(code)
         tree = ast.parse(code)
         undefined = (
@@ -198,7 +200,20 @@ class ImportFixer(ManualFix):
             for name in still_undefined:
                 # First try: follow the import chain from the current file
                 module = find_class_module(name, tree, stubs_dir)
-                # Second try: look at how the name appears in supertype stubs
+                # Second try: use the pre-autoimport tree as a hint source —
+                # autoimport may have stripped an alias import (e.g.
+                # `import Signer as _Signer`) that still carries the module path
+                if module is None:
+                    module = find_class_module(
+                        name, pre_autoimport_tree, stubs_dir
+                    )
+                # Third try: scan the pre-autoimport tree's own annotations for
+                # dotted attribute expressions (e.g. `google.auth.crypt.Signer`)
+                if module is None:
+                    module = find_class_by_annotation_attr(
+                        name, pre_autoimport_tree, stubs_dir
+                    )
+                # Fourth try: look at how the name appears in supertype stubs
                 if module is None:
                     module = find_name_in_supertype_stubs(
                         name, supertype_modules, stubs_dir

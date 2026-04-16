@@ -56,13 +56,6 @@ class ForkAndPRBase(BaseModel, ABC):
         )
         return result.stdout.strip()
 
-    def _stage_py_typed(self, tmp_dir: str, directory: Path) -> Path | None:
-        py_typed = directory / "py.typed"
-        if not py_typed.exists():
-            py_typed.touch()
-            return py_typed.relative_to(tmp_dir)
-        return None
-
     @abstractmethod
     def _stage_files(
         self,

@@ -50,7 +50,9 @@ from stub_adder.transformer.multifile_fixes import (
 )
 from stub_adder.transformer.process import (
     AnyProcess,
+    AnyReplacer,
     Black,
+    PreCommitHooks,
     Pyupgrade,
     RuffFix,
     StringAnnotationUnquoter,
@@ -136,11 +138,13 @@ class FixErrors(BaseModel):
     )
     process: tuple[AnyProcess, ...] = Field(
         default_factory=lambda: (
+            AnyReplacer(),
             UnusedImportRemover(),
             StringAnnotationUnquoter(),
             Pyupgrade(),
             Black(),
             RuffFix(),
+            PreCommitHooks(),
         )
     )
     logger: PydanticLogger = PydanticLogger(name=__name__)
